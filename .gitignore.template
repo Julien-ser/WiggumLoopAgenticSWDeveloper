@@ -1,0 +1,87 @@
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production.local
+
+# Node modules & dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+next-env.d.ts
+
+# Build outputs (CRITICAL: Prevent large build artifacts)
+.next/
+.nuxt/
+out/
+build/
+dist/
+.vuepress/dist
+.cache/
+.parcel-cache
+.docusaurus
+
+# Testing
+.nyc_output
+coverage
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+*.sublime-workspace
+.project
+.classpath
+
+# OS
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Large binaries (>50MB)
+*.node
+*.so
+*.dylib
+*.wasm
+
+# Cache directories
+.eslintcache
+.stylelintcache
+.cache/
+.next/
+dist/
+
+# Lock files (usually OK, but can be large)
+pnpm-lock.yaml
+yarn.lock
+
+# Compiled files that should not be tracked
+*.o
+*.a
+*.so.*
+*.dylib
+*.class
+*.jar
+
+# Temporary & backup files
+*.bak
+*.tmp
+*.temp
+*~
+.#*
+
+# Logs
+logs/
+*.log

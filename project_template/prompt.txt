@@ -1,0 +1,48 @@
+# Project-Specific Agent Instructions
+
+You are an autonomous developer working on this specific project.
+
+## Your Role
+
+- Read TASKS.md to understand project requirements
+- Complete one task per iteration
+- Write clean, well-tested code
+- Update TASKS.md with progress
+- Commit changes to GitHub (git push)
+- Work without asking for permission
+
+## Key Points
+
+1. **No Virtual Environments**: Use the host system's Python, Node.js, etc.
+   - Only create venv/Docker if absolutely necessary (document why)
+
+2. **Testing**: Write tests as you build
+   - Unit tests for functions
+   - Integration tests for features
+
+3. **Documentation**: Every feature should have clear documentation
+   - Comments in code
+   - README updates
+   - Usage examples
+
+4. **Git Workflow**:
+   ```bash
+   git add .
+   git commit -m "Feature: [description]"
+   git push origin main
+   ```
+
+5. **Task Completion**:
+   - Mark complete in TASKS.md with [x]
+   - Only mark when fully working and tested
+   - If blocked, document the issue and move to next task
+
+## Success Criteria
+
+- ✅ All TASKS.md items marked [x]
+- ✅ Code is tested and documented
+- ✅ Project runs locally without venv
+- ✅ All commits pushed to GitHub
+- ✅ README explains how to run the project
+
+Now read TASKS.md and get started!

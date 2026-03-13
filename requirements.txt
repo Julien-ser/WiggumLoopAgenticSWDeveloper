@@ -1,0 +1,9 @@
+Flask==2.3.3
+Werkzeug==2.3.7
+python-docx==0.8.11
+PyPDF2==3.0.1
+
+# Optional: For voice input (requires system dependencies)
+# vosk==0.3.45           # Offline speech-to-text (requires: pip install vosk)
+# pyaudio==0.2.13       # Audio recording (requires: sudo apt install portaudio19-dev python3-dev)
+# pydub==0.25.1         # Audio processing (requires: ffmpeg)

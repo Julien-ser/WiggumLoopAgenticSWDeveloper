@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wiggum Web Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #eee;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            border-bottom: 2px solid #00ff00;
+        }
+        
+        h1 {
+            color: #00ff00;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #00ccff;
+            font-size: 1.1em;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .section {
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #00ccff;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .section h2 {
+            color: #00ff00;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ccff;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+        
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            background: #0a1428;
+            border: 1px solid #00ccff;
+            color: #00ff00;
+            font-family: inherit;
+            font-size: 0.95em;
+            border-radius: 4px;
+        }
+        
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            background: #00ccff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 4px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #00ff00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .btn-toggle {
+            background: #0a3050;
+            border: 1px solid #00ccff;
+            color: #00ccff;
+        }
+        
+        .btn-toggle:hover {
+            background: #0a5080;
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+        
+        .btn-toggle.active {
+            background: #00ccff;
+            color: #1a1a2e;
+            border-color: #00ff00;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .project-card {
+            background: rgba(0, 30, 60, 0.9);
+            border: 2px solid #00ccff;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .project-card:hover {
+            border-color: #00ff00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+        }
+        
+        .project-name {
+            color: #00ff00;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .project-status {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-running {
+            background: rgba(0, 255, 0, 0.2);
+            color: #00ff00;
+            border: 1px solid #00ff00;
+        }
+        
+        .status-stopped {
+            background: rgba(255, 100, 0, 0.2);
+            color: #ff9900;
+            border: 1px solid #ff9900;
+        }
+        
+        .project-progress {
+            color: #00ccff;
+            font-size: 0.95em;
+            margin: 10px 0;
+        }
+        
+        .current-task {
+            color: #ffff00;
+            font-size: 0.9em;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 0, 0.1);
+            border-left: 3px solid #ffff00;
+            border-radius: 3px;
+        }
+        
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .project-actions button {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.9em;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+        
+        .message {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        
+        .message.success {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+        
+        .message.error {
+            background: rgba(255, 50, 50, 0.1);
+            border-color: #ff3333;
+            color: #ff6666;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ffff00;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0.3; }
+        }
+        
+        .no-projects {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+            font-size: 1.1em;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #00ccff;
+            color: #00ccff;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐳 Wiggum Master Control</h1>
+            <p class="subtitle">OpenCode-powered autonomous project management</p>
+        </header>
+        
+        <div class="main-grid">
+            <!-- Create Project Form -->
+            <div class="section">
+                <h2>➕ Create Project</h2>
+                
+                <div id="createMessage"></div>
+                
+                <form id="createForm">
+                    <div class="form-group">
+                        <label for="projectName">Project Name *</label>
+                        <input type="text" id="projectName" placeholder="e.g., todo-api" required>
+                        <small style="color: #999; margin-top: 5px; display: block;">Letters, numbers, hyphens only</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="projectDesc">Description / Mission</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <button type="button" class="btn-toggle" onclick="toggleDescriptionMode('text')" id="texModeBtn" style="flex: 1; padding: 8px;">📝 Text Input</button>
+                            <button type="button" class="btn-toggle" onclick="toggleDescriptionMode('file')" id="fileModeBtn" style="flex: 1; padding: 8px;">📄 Upload File</button>
+                        </div>
+                        
+                        <!-- Text mode -->
+                        <textarea id="projectDesc" placeholder="What should this project do?&#10;&#10;e.g., Build a REST API for managing tasks with authentication and database" style="display: block;"></textarea>
+                        
+                        <!-- File mode -->
+                        <div id="fileUploadSection" style="display: none;">
+                            <input type="file" id="descriptionFile" accept=".txt,.pdf,.docx" style="width: 100%; padding: 10px; border: 1px dashed #00ccff; border-radius: 4px; background: #0a1428; color: #00ff00;">
+                            <small style="color: #999; margin-top: 5px; display: block;">Supported: TXT, PDF, DOCX (max 10MB)</small>
+                            <div id="fileStatus" style="color: #00ccff; margin-top: 8px; font-size: 0.9em;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoStart" checked>
+                        <label for="autoStart" style="margin: 0;">Auto-start worker after creation</label>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit">✨ Create Project</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Projects List -->
+            <div class="section">
+                <h2>📊 Active Projects</h2>
+                <div id="projectsList" class="projects-grid">
+                    <div class="no-projects">Loading projects...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Completed Projects Section -->
+        <div class="section">
+            <h2>✅ Completed Projects</h2>
+            <div id="completedProjectsList" class="projects-grid">
+                <div class="no-projects">No completed projects yet</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>🌐 Wiggum Web Server • OpenCode AI Integration • Real-time Project Management</p>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api';
+        let currentDescriptionMode = 'text';
+        
+        // Load projects on page load
+        loadProjects();
+        
+        // Refresh projects every 3 seconds
+        setInterval(loadProjects, 3000);
+        
+        // Handle form submission
+        document.getElementById('createForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await createProject();
+        });
+        
+        // Handle file upload
+        document.getElementById('descriptionFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            const statusDiv = document.getElementById('fileStatus');
+            
+            if (!file) return;
+            
+            statusDiv.textContent = '⏳ Extracting text...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${API_BASE}/extract-text`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('projectDesc').value = result.text;
+                    statusDiv.textContent = `✓ Extracted ${result.text.length} characters`;
+                } else {
+                    statusDiv.textContent = `❌ ${result.error}`;
+                    statusDiv.style.color = '#ff6666';
+                }
+            } catch (error) {
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                statusDiv.style.color = '#ff6666';
+            }
+        });
+        
+        function toggleDescriptionMode(mode) {
+            currentDescriptionMode = mode;
+            const textSection = document.getElementById('projectDesc').parentElement;
+            const fileSection = document.getElementById('fileUploadSection');
+            const textBtn = document.getElementById('texModeBtn');
+            const fileBtn = document.getElementById('fileModeBtn');
+            
+            if (mode === 'text') {
+                document.getElementById('projectDesc').style.display = 'block';
+                fileSection.style.display = 'none';
+                textBtn.classList.add('active');
+                fileBtn.classList.remove('active');
+            } else {
+                document.getElementById('projectDesc').style.display = 'none';
+                fileSection.style.display = 'block';
+                fileBtn.classList.add('active');
+                textBtn.classList.remove('active');
+            }
+        }
+        
+        // Set initial active button
+        document.getElementById('texModeBtn').classList.add('active');
+        
+        async function loadProjects() {
+            try {
+                const response = await fetch(`${API_BASE}/projects`);
+                const data = await response.json();
+                
+                const activeContainer = document.getElementById('projectsList');
+                const completedContainer = document.getElementById('completedProjectsList');
+                
+                // Render active projects
+                if (!data.active || data.active.length === 0) {
+                    activeContainer.innerHTML = '<div class="no-projects">No active projects. Create one to get started!</div>';
+                } else {
+                    activeContainer.innerHTML = data.active.map(project => `
+                        <div class="project-card">
+                            <div class="project-name">${project.name}</div>
+                            
+                            <div class="project-status ${project.is_running ? 'status-running' : 'status-stopped'}">
+                                ${project.is_running ? '🟢 RUNNING' : '⚫ STOPPED'}
+                            </div>
+                            
+                    <div class="project-progress">
+                                Tasks: ${project.completed}/${project.total}
+                                <div style="color: #ffff00; margin-top: 5px; font-size: 0.9em;">Iteration: ${project.iteration}</div>
+                            </div>
+                            
+                            ${project.current_task ? `
+                                <div class="current-task">
+                                    <strong>Current:</strong> ${project.current_task.substring(0, 60)}${project.current_task.length > 60 ? '...' : ''}
+                                </div>
+                            ` : ''}
+                            
+                            <div class="project-actions">
+                                ${project.is_running ? 
+                                    `<button class="btn-small" onclick="stopProject('${project.name}')">⏹️ Stop</button>` :
+                                    `<button class="btn-small" onclick="startProject('${project.name}')">▶️ Start</button>`
+                                }
+                                <button class="btn-small" onclick="viewLogs('${project.name}')">📋 Logs</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                // Render completed projects
+                if (!data.completed || data.completed.length === 0) {
+                    completedContainer.innerHTML = '<div class="no-projects">No completed projects yet</div>';
+                } else {
+                    completedContainer.innerHTML = data.completed.map(project => `
+                        <div class="project-card">
+                            <div class="project-name">${project.name}</div>
+                            
+                            <div class="project-status" style="background: rgba(0, 255, 0, 0.2); color: #00ff00; border: 1px solid #00ff00;">
+                                ✅ COMPLETED
+                            </div>
+                            
+                            <div class="project-progress">
+                                Tasks: ${project.completed}/${project.total} ✓
+                                <div style="color: #ffff00; margin-top: 5px; font-size: 0.9em;">Iteration: ${project.iteration}</div>
+                            </div>
+                            
+                            <div class="project-actions">
+                                <button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>
+                                <button class="btn-small" onclick="viewLogs('${project.name}')">📋 Logs</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+        
+        async function createProject() {
+            const name = document.getElementById('projectName').value.trim();
+            let description = document.getElementById('projectDesc').value.trim();
+            const autoStart = document.getElementById('autoStart').checked;
+            const messageDiv = document.getElementById('createMessage');
+            
+            if (!name) {
+                showMessage('Project name is required', 'error', messageDiv);
+                return;
+            }
+            
+            // If no description, that's okay
+            if (!description) {
+                description = `Project: ${name}`;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/create-project`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, auto_start: autoStart })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('✓ ' + result.message, 'success', messageDiv);
+                    document.getElementById('createForm').reset();
+                    setTimeout(loadProjects, 500);
+                } else {
+                    showMessage('❌ ' + result.error, 'error', messageDiv);
+                }
+            } catch (error) {
+                showMessage('❌ Error: ' + error.message, 'error', messageDiv);
+            }
+        }
+        
+        async function startProject(name) {
+            try {
+                const response = await fetch(`${API_BASE}/start-project/${name}`, { method: 'POST' });
+                
+                if (response.ok) {
+                    loadProjects();
+                } else {
+                    alert('Failed to start project');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function stopProject(name) {
+            if (!confirm(`Stop worker for "${name}"?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/stop-project/${name}`, { method: 'POST' });
+                
+                if (response.ok) {
+                    loadProjects();
+                } else {
+                    alert('Failed to stop project');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function pushProject(name) {
+            if (!confirm(`Run checks and push for "${name}"?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/push-project/${name}`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`✓ ${result.message}\n\nWorker PID: ${result.pid}`);
+                    loadProjects();
+                } else {
+                    alert(`❌ ${result.error}`);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function viewLogs(name) {
+            try {
+                const response = await fetch(`${API_BASE}/logs/${name}`);
+                const data = await response.json();
+                
+                // Debug info
+                console.log(`Logs response for ${name}:`, data);
+                
+                if (!data.logs || data.logs.length === 0) {
+                    alert(`No logs found for project "${name}"\n\nLogs directory: ${data.logs_dir}\nTotal files: ${data.total}`);
+                    return;
+                }
+                
+                // Get most recent iteration only
+                const latestLog = data.logs[0];
+                
+                // Create modal
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.8);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                    padding: 20px;
+                `;
+                
+                const content = document.createElement('div');
+                content.style.cssText = `
+                    background: #0a1428;
+                    border: 2px solid #00ccff;
+                    border-radius: 8px;
+                    max-width: 900px;
+                    width: 100%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    padding: 20px;
+                    color: #eee;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.9em;
+                `;
+                
+                const header = document.createElement('div');
+                header.style.cssText = `
+                    display: flex;
+                    justify-content: flex-start;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    border-bottom: 1px solid #00ccff;
+                    padding-bottom: 10px;
+                `;
+                
+                const h3 = document.createElement('h3');
+                h3.textContent = `📋 ${name} - Latest Iteration ${latestLog.iteration}`;
+                h3.style.cssText = 'color: #00ff00; margin: 0;';
+                
+                header.appendChild(h3);
+                
+                const logDiv = document.createElement('div');
+                logDiv.style.marginBottom = '30px';
+                const pre = document.createElement('pre');
+                pre.textContent = latestLog.content;
+                pre.style.cssText = 'margin: 0; white-space: pre-wrap; word-wrap: break-word; background: #000; padding: 10px; border-radius: 4px; overflow-x: auto;';
+                logDiv.appendChild(pre);
+                
+                content.appendChild(header);
+                content.appendChild(logDiv);
+                modal.appendChild(content);
+                
+                // Close modal when clicking outside the content box
+                modal.onclick = (e) => {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                };
+                
+                document.body.appendChild(modal);
+                
+            } catch (error) {
+                alert('Error loading logs: ' + error.message);
+                console.error('Logs fetch error:', error);
+            }
+        }
+        
+        function showMessage(text, type, container) {
+            container.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
