@@ -15,6 +15,31 @@ if [ -z "$PROJECT_PATH" ]; then
     exit 1
 fi
 
+# ============================================================================
+# SECURITY: PREVENT DEBUG OUTPUT FROM LEAKING ENV VARS
+# ============================================================================
+# Disable bash debugging/tracing that could print environment variables
+set +x  # Don't print commands
+set +v  # Don't print input lines
+
+# ============================================================================
+# SECURITY: SANITIZATION FUNCTION FOR API KEYS
+# ============================================================================
+# This function redacts sensitive data from output before logging
+sanitize_output() {
+    local input="$1"
+    # Redact OpenRouter API keys (format: sk-or-v1-xxxxx) - most thorough
+    echo "$input" | sed -E 's/sk-or-v1-[a-zA-Z0-9]{60,}/sk-or-v1-REDACTED/g' | \
+    # Redact OPENROUTER_API_KEY in all formats (env vars, declare -x, exports, etc)
+    sed -E 's/(OPENROUTER_API_KEY["\x27]?)([=:]|[[:space:]]+)(["\x27]?)([^ "\x27]+)/\1\2\3REDACTED/g' | \
+    # Redact WIGGUM_MODEL and WIGGUM_UNSTICK_MODEL (contain sensitive model info)
+    sed -E 's/(WIGGUM_(UN)?STICK_MODEL["\x27]?)([=:]|[[:space:]]+)(["\x27]?)([^ "\x27]+)/\1\3REDACTED/g' | \
+    # Redact any Authorization headers
+    sed -E 's/(Authorization: Bearer ).{20,}/\1REDACTED/g' | \
+    # Redact quoted API key values (declare -x format: OPENROUTER_API_KEY="value")
+    sed -E 's/(OPENROUTER_API_KEY=")([^"]+)(")/ \1REDACTED\3/g'
+}
+
 if [ ! -d "$PROJECT_PATH" ]; then
     echo "❌ Project path does not exist: $PROJECT_PATH"
     exit 1
@@ -78,15 +103,21 @@ if [ ! -f ".gitignore" ]; then
     else
         echo "⚠️  Template not found at $TEMPLATE_PATH, creating minimal .gitignore"
         cat > .gitignore <<'GITIGNORE_MINIMAL'
-# Auto-generated minimal .gitignore
-node_modules/
+# Critical: Always exclude .env files (contain API keys)
 .env
 .env.local
+.env.*.local
+
+# Logs and temporary files (may contain sensitive API keys)
+logs/
+*.log
+
+# Auto-generated
+node_modules/
 .next/
 build/
 dist/
 .cache/
-*.log
 GITIGNORE_MINIMAL
     fi
 fi
@@ -244,15 +275,41 @@ check_progress_made() {
 declare -A task_attempts
 declare -A task_last_progress_iter
 
-# Setup logging
+# Setup logging with GUARANTEED sanitization (no fallback)
 LOG_FILE="logs/worker-session-$(date +%Y%m%d-%H%M%S).log"
-exec 1> >(tee -a "$LOG_FILE")
+
+# Create log file first
+mkdir -p logs
+touch "$LOG_FILE"
+
+# Create named pipe for sanitization
+SANITIZE_FIFO="/tmp/wiggum_sanitize_$$"
+mkfifo "$SANITIZE_FIFO" 2>/dev/null || SANITIZE_FIFO="/tmp/wiggum_sanitize_$RANDOM"
+
+# Start background sanitization process
+{
+    while IFS= read -r line; do
+        sanitized=$(sanitize_output "$line")
+        echo "$sanitized"
+    done < "$SANITIZE_FIFO" >> "$LOG_FILE"
+} &
+SANITIZE_PID=$!
+
+# Redirect ALL output (stdout & stderr) through sanitization
+exec 1>"$SANITIZE_FIFO"
 exec 2>&1
+
+# Cleanup function for named pipe
+cleanup_sanitize() {
+    exec 1>&-  # Close the pipe writer
+    wait $SANITIZE_PID 2>/dev/null || true
+    rm -f "$SANITIZE_FIFO" 2>/dev/null || true
+}
 
 # Error handling
 set +e  # Don't exit on errors
 set -o pipefail  # Preserve exit codes through pipes
-trap 'echo "❌ Worker interrupted"; cleanup' EXIT INT TERM
+trap 'echo "❌ Worker interrupted"; cleanup_sanitize; cleanup' EXIT INT TERM
 
 cleanup() {
     completed=$(grep -c '^- \[x\]' TASKS.md 2>/dev/null) && : || completed=0
