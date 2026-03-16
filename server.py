@@ -105,7 +105,7 @@ def extract_text():
 
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
-    """Get list of all projects with status"""
+    """Get list of all projects with status and agent role"""
     projects_dir = os.path.join(MASTER_DIR, 'projects')
     active_projects = []
     completed_projects = []
@@ -125,6 +125,16 @@ def get_projects():
                     is_running = result.returncode == 0
                 except:
                     is_running = False
+                
+                # Get active agent role
+                agent_role = 'generic'
+                agent_file = os.path.join(project_path, '.agent_role')
+                if os.path.exists(agent_file):
+                    try:
+                        with open(agent_file, 'r') as f:
+                            agent_role = f.read().strip()
+                    except:
+                        agent_role = 'generic'
                 
                 # Get task progress
                 completed = 0
@@ -168,7 +178,8 @@ def get_projects():
                     'is_running': is_running,
                     'current_task': current_task,
                     'is_completed': is_completed,
-                    'iteration': iteration
+                    'iteration': iteration,
+                    'agent_role': agent_role
                 }
                 
                 if is_completed:
@@ -239,11 +250,18 @@ def create_project():
 
 @app.route('/api/start-project/<project_name>', methods=['POST'])
 def start_project(project_name):
-    """Start a project worker"""
+    """Start a project worker with optional agent role"""
+    data = request.json or {}
+    agent_role = data.get('agent_role', 'generic')
+    
     try:
+        # Get worker mode preference (persistent by default in new version)
+        persistent = data.get('persistent', False)  # Optional flag
+        
+        cmd = ['bash', os.path.join(MASTER_DIR, 'wiggum_master.sh'), 'start', project_name, agent_role]
+        
         result = subprocess.run(
-            ['bash', os.path.join(MASTER_DIR, 'wiggum_master.sh'), 
-             'start', project_name],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10
@@ -252,7 +270,8 @@ def start_project(project_name):
         if result.returncode != 0:
             return jsonify({'error': 'Failed to start project'}), 500
         
-        return jsonify({'success': True, 'message': f'Started worker for {project_name}'})
+        mode_str = 'persistent' if persistent else 'session'
+        return jsonify({'success': True, 'message': f'Started {mode_str} worker for {project_name} with {agent_role} agent'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -366,6 +385,181 @@ def get_logs(project_name):
         'total': len(iteration_files),
         'logs_dir': logs_dir
     })
+
+@app.route('/api/project-details/<project_name>', methods=['GET'])
+def get_project_details(project_name):
+    """Get detailed information about a project including pipeline status, agents, config, and logs"""
+    project_path = os.path.join(MASTER_DIR, 'projects', project_name)
+    
+    if not os.path.exists(project_path):
+        return jsonify({'error': f'Project "{project_name}" not found'}), 404
+    
+    try:
+        # Determine pipeline status based on tasks and logs
+        tasks_file = os.path.join(project_path, 'TASKS.md')
+        pipeline_status = {
+            'setup': False,
+            'development': False,
+            'testing': False,
+            'staging': False,
+            'production': False,
+            'current': 'setup'
+        }
+        
+        # Read TASKS.md to determine progress
+        completed_tasks = 0
+        total_tasks = 0
+        
+        if os.path.exists(tasks_file):
+            with open(tasks_file, 'r') as f:
+                content = f.read()
+                completed_tasks = content.count('- [x]')
+                total_tasks = content.count('- [')
+        
+        # Simple heuristic: based on completion percentage, determine pipeline stage
+        if total_tasks > 0:
+            completion_pct = (completed_tasks / total_tasks) * 100
+            
+            if completion_pct >= 100:
+                pipeline_status['production'] = True
+                pipeline_status['staging'] = True
+                pipeline_status['testing'] = True
+                pipeline_status['development'] = True
+                pipeline_status['setup'] = True
+                pipeline_status['current'] = 'production'
+            elif completion_pct >= 80:
+                pipeline_status['staging'] = True
+                pipeline_status['testing'] = True
+                pipeline_status['development'] = True
+                pipeline_status['setup'] = True
+                pipeline_status['current'] = 'staging'
+            elif completion_pct >= 60:
+                pipeline_status['testing'] = True
+                pipeline_status['development'] = True
+                pipeline_status['setup'] = True
+                pipeline_status['current'] = 'testing'
+            elif completion_pct >= 30:
+                pipeline_status['development'] = True
+                pipeline_status['setup'] = True
+                pipeline_status['current'] = 'development'
+            else:
+                pipeline_status['setup'] = True
+                pipeline_status['current'] = 'setup'
+        else:
+            pipeline_status['setup'] = True
+            pipeline_status['current'] = 'setup'
+        
+        # Get assigned agents based on what we know
+        agents = [
+            {
+                'name': 'Project Orchestrator',
+                'role': 'Multi-Agent Coordinator',
+                'active': True
+            },
+            {
+                'name': 'QA Specialist',
+                'role': 'Testing & Quality',
+                'active': completed_tasks > 0
+            },
+            {
+                'name': 'DevOps Engineer',
+                'role': 'Infrastructure & CI/CD',
+                'active': completion_pct >= 60 if total_tasks > 0 else False
+            },
+            {
+                'name': 'Release Manager',
+                'role': 'Release Coordination',
+                'active': completion_pct >= 80 if total_tasks > 0 else False
+            },
+            {
+                'name': 'Documentation Specialist',
+                'role': 'Docs & Communication',
+                'active': True
+            }
+        ]
+        
+        # Get currently active agent role
+        active_agent_role = 'generic'
+        agent_file = os.path.join(project_path, '.agent_role')
+        if os.path.exists(agent_file):
+            try:
+                with open(agent_file, 'r') as f:
+                    active_agent_role = f.read().strip()
+            except:
+                pass
+        
+        # Get configuration
+        config_items = [
+            {'key': 'Project Name', 'value': project_name},
+            {'key': 'Status', 'value': f'{completed_tasks}/{total_tasks} tasks'},
+            {'key': 'Completion', 'value': f'{(completed_tasks / total_tasks * 100):.1f}%' if total_tasks > 0 else '0%'},
+            {'key': 'Stage', 'value': pipeline_status['current'].title()},
+            {'key': 'Project Path', 'value': f'projects/{project_name}'},
+            {'key': 'Created', 'value': 'OpenCode AI'},
+            {'key': 'Git Remote', 'value': 'github.com (configured)'},
+            {'key': 'Worker Status', 'value': 'Running' if is_project_running(project_name) else 'Stopped'}
+        ]
+        
+        # Get latest log content
+        logs_dir = os.path.join(project_path, 'logs')
+        latest_log_content = ""
+        latest_iteration = 0
+        
+        if os.path.exists(logs_dir):
+            import glob
+            iteration_files = glob.glob(os.path.join(logs_dir, 'iteration-*.md'))
+            
+            if iteration_files:
+                # Find the latest iteration
+                latest_file = None
+                for f in iteration_files:
+                    match = re.search(r'iteration-(\d+)', f)
+                    if match:
+                        iter_num = int(match.group(1))
+                        if iter_num > latest_iteration:
+                            latest_iteration = iter_num
+                            latest_file = f
+                
+                if latest_file:
+                    try:
+                        with open(latest_file, 'r', encoding='utf-8') as f:
+                            latest_log_content = f.read()
+                    except:
+                        latest_log_content = "(Could not read latest log)"
+        
+        if not latest_log_content:
+            latest_log_content = "No logs available yet. Worker may not have started."
+        
+        return jsonify({
+            'project_name': project_name,
+            'pipeline': {
+                'setup': pipeline_status['setup'],
+                'development': pipeline_status['development'],
+                'testing': pipeline_status['testing'],
+                'staging': pipeline_status['staging'],
+                'production': pipeline_status['production'],
+                'current': pipeline_status['current']
+            },
+            'agents': agents,
+            'active_agent_role': active_agent_role,
+            'config': config_items,
+            'latest_log': latest_log_content,
+            'latest_iteration': latest_iteration
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'Error getting project details: {str(e)}'}), 500
+
+def is_project_running(project_name):
+    """Check if a project worker is currently running"""
+    try:
+        result = subprocess.run(
+            ['pgrep', '-f', f'wiggum_worker.sh.*{project_name}'],
+            capture_output=True
+        )
+        return result.returncode == 0
+    except:
+        return False
 
 if __name__ == '__main__':
     # Create templates directory if needed

@@ -216,6 +216,13 @@ create_project() {
     # Copy template
     cp -r "$TEMPLATE_DIR" "$project_path"
     
+    # Copy GitHub Actions workflows
+    if [ -d "${MASTER_DIR}/.github/workflows" ]; then
+        mkdir -p "${project_path}/.github/workflows"
+        cp "${MASTER_DIR}/.github/workflows"/*.yml "${project_path}/.github/workflows/" 2>/dev/null || true
+        success "Copied GitHub Actions workflows"
+    fi
+    
     # Generate unique TASKS.md based on description
     generate_tasks_md "$project_path" "$project_name" "$task_description"
     
@@ -245,6 +252,10 @@ create_project() {
         opencode /init --yes 2>/dev/null || warning "Could not generate AGENTS.md"
     fi
     
+    # Set default agent role (can be overridden on start)
+    echo "project-orchestrator" > "${project_path}/.agent_role"
+    success "Project initialized with project-orchestrator agent"
+    
     success "Project created: $project_path"
     log "GitHub repo setup: ${github_repo}"
     
@@ -269,9 +280,10 @@ create_project() {
     echo ""
 }
 
-# Start a project worker
+# Start a project worker with optional agent role
 start_project() {
     local project_name="$1"
+    local agent_role="${2:-generic}"  # Optional second parameter for agent role
     local project_path="${PROJECTS_DIR}/${project_name}"
     
     if [ ! -d "$project_path" ]; then
@@ -280,6 +292,7 @@ start_project() {
     fi
     
     log "Starting worker for: $project_name"
+    [ "$agent_role" != "generic" ] && log "  Agent Role: $agent_role"
     
     # Check if already running
     if pgrep -f "wiggum_worker.sh.*$project_name" > /dev/null; then
@@ -289,11 +302,15 @@ start_project() {
     
     # Start worker in background with nohup to survive terminal close
     cd "$MASTER_DIR"
-    nohup bash wiggum_worker.sh "$project_path" > /dev/null 2>&1 &
+    if [ "$agent_role" = "generic" ]; then
+        nohup bash wiggum_worker.sh "$project_path" > /dev/null 2>&1 &
+    else
+        nohup bash wiggum_worker.sh "$project_path" --agent "$agent_role" > /dev/null 2>&1 &
+    fi
     local pid=$!
     
     register_worker "$project_name" "$pid"
-    success "Worker started for $project_name (PID: $pid)"
+    success "Worker started for $project_name (PID: $pid) with $agent_role agent"
     log "Logs available at: ${LOGS_DIR}/${project_name}.log"
     echo ""
 }

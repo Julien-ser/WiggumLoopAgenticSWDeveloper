@@ -1,0 +1,99 @@
+name: Report CI Errors to Wiggum Workers
+
+on:
+  workflow_run:
+    workflows:
+      - "test"
+      - "Test"
+      - "build"
+      - "Build"
+      - "ci"
+    types:
+      - completed
+
+jobs:
+  report-error:
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Get workflow failure details
+        id: get-failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id
+            });
+            
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id
+            });
+            
+            let errorMessage = `CI/CD Failure in ${run.data.name} (workflow run #${run.data.run_number})`;
+            
+            // Extract error details from failed jobs
+            for (const job of jobs.data.jobs) {
+              if (job.status === 'completed' && job.conclusion === 'failure') {
+                errorMessage += `\nFailed job: ${job.name}`;
+                if (job.conclusion) {
+                  errorMessage += ` - ${job.conclusion}`;
+                }
+              }
+            }
+            
+            console.log(errorMessage);
+            core.setOutput('error_message', errorMessage);
+            
+      - name: Add error to TASKS.md
+        if: success()
+        run: |
+          # Check if TASKS.md exists
+          if [ ! -f TASKS.md ]; then
+            echo "TASKS.md not found, skipping error reporting"
+            exit 0
+          fi
+          
+          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+          ERROR_TASK="- [ ] 🔴 CI/CD Error from ${{ github.workflow }} (Run #${{ github.run_number }}) - Review logs at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Check if error task already exists (avoid duplicates)
+          if grep -q "CI/CD Error from ${{ github.workflow }}" TASKS.md; then
+            echo "Error task already exists, skipping"
+            exit 0
+          fi
+          
+          # Add error task to TASKS.md at the top of uncompleted tasks
+          sed -i '1s/^/'"$ERROR_TASK"'\n/' TASKS.md
+          
+          echo "Added error task to TASKS.md"
+          cat TASKS.md | head -5
+          
+      - name: Commit error report
+        if: success()
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git config user.name "Wiggum Bot"
+          git config user.email "wiggum@bot.local"
+          git add TASKS.md
+          git commit -m "🔴 Auto-reported CI/CD error from ${{ github.workflow }}"
+          git push
+        env:
+          GIT_AUTHOR_NAME: Wiggum Bot
+          GIT_AUTHOR_EMAIL: wiggum@bot.local
+          GIT_COMMITTER_NAME: Wiggum Bot
+          GIT_COMMITTER_EMAIL: wiggum@bot.local

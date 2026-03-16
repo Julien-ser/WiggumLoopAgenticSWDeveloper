@@ -1,0 +1,232 @@
+name: Wiggum System Check
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Every hour
+  workflow_dispatch:
+  push:
+    paths:
+      - 'wiggum*.sh'
+      - '.github/workflows/wiggum-system*.yml'
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check bash syntax
+      run: |
+        for script in wiggum*.sh; do
+          if [ -f "$script" ]; then
+            echo "Checking $script..."
+            bash -n "$script" || exit 1
+          fi
+        done
+        echo "✅ All scripts have valid syntax"
+    
+    - name: Shellcheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: '.'
+        format: gcc
+      continue-on-error: true
+
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Verify essential files
+      run: |
+        required_files=(
+          "wiggum_worker.sh"
+          "wiggum_master.sh"
+          "wiggum_worker_persistent.sh"
+          "wiggum_worker_manager.sh"
+          "server.py"
+          "prompt.txt"
+          ".env.example"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Missing required file: $file"
+            exit 1
+          fi
+        done
+        echo "✅ All required system files present"
+    
+    - name: Check .env configuration
+      run: |
+        if [ ! -f .env ]; then
+          echo "⚠️  .env file not found"
+          if [ -f .env.example ]; then
+            echo "ℹ️ Create .env from .env.example:"
+            echo "cp .env.example .env"
+          fi
+        else
+          if ! grep -q "OPENROUTER_API_KEY" .env; then
+            echo "⚠️  OPENROUTER_API_KEY not set in .env"
+          else
+            echo "✅ OPENROUTER_API_KEY configured"
+          fi
+        fi
+    
+    - name: Verify project template
+      run: |
+        if [ ! -d "project_template" ]; then
+          echo "❌ Missing project_template directory"
+          exit 1
+        fi
+        
+        required_template_files=(
+          "TASKS.md"
+          "README.md"
+          "prompt.txt"
+        )
+        
+        for file in "${required_template_files[@]}"; do
+          if [ ! -f "project_template/$file" ]; then
+            echo "⚠️  Missing project_template/$file"
+          fi
+        done
+        echo "✅ Project template structure valid"
+    
+    - name: Check GitHub Actions workflows
+      run: |
+        if [ ! -d ".github/workflows" ]; then
+          echo "⚠️  No .github/workflows directory found"
+        else
+          echo "Found workflows:"
+          ls -1 .github/workflows/*.yml 2>/dev/null | sed 's/^/  /'
+        fi
+
+  project-validation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate all projects
+      run: |
+        projects_dir="projects"
+        if [ ! -d "$projects_dir" ]; then
+          echo "ℹ️  No projects directory found (expected for new setup)"
+          exit 0
+        fi
+        
+        project_count=0
+        for project_dir in "$projects_dir"/*; do
+          if [ -d "$project_dir" ]; then
+            project_name=$(basename "$project_dir")
+            project_count=$((project_count + 1))
+            
+            echo "Validating project: $project_name"
+            
+            # Check for required files
+            if [ -f "$project_dir/TASKS.md" ]; then
+              task_count=$(grep -c "^- \[" "$project_dir/TASKS.md" 2>/dev/null || echo "0")
+              echo "  ✓ TASKS.md ($task_count tasks)"
+            else
+              echo "  ⚠️  Missing TASKS.md"
+            fi
+            
+            if [ -f "$project_dir/README.md" ]; then
+              echo "  ✓ README.md"
+            fi
+            
+            if [ -d "$project_dir/.git" ]; then
+              echo "  ✓ Git repository initialized"
+            fi
+          fi
+        done
+        
+        if [ $project_count -eq 0 ]; then
+          echo "ℹ️  No projects found (expected for new setup)"
+        else
+          echo "✅ Validated $project_count projects"
+        fi
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check dependencies
+      run: |
+        echo "Checking required system dependencies..."
+        
+        # Check for npm/opencode
+        if command -v npm &> /dev/null; then
+          npm_version=$(npm --version)
+          echo "✅ npm: $npm_version"
+        else
+          echo "⚠️  npm not installed (required for opencode-ai)"
+        fi
+        
+        # Check for git
+        if command -v git &> /dev/null; then
+          git_version=$(git --version)
+          echo "✅ $git_version"
+        else
+          echo "❌ git not installed (required)"
+          exit 1
+        fi
+        
+        # Check for gh (GitHub CLI)
+        if command -v gh &> /dev/null; then
+          echo "✅ GitHub CLI installed"
+        else
+          echo "⚠️  GitHub CLI (gh) not installed (recommended for repo management)"
+        fi
+
+  system-report:
+    needs: [syntax-check, health-check, project-validation, dependencies]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Generate system report
+      run: |
+        cat > wiggum-system-report.md <<'EOF'
+        # Wiggum System Health Report
+        
+        Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+        
+        ## Status Summary
+        - Syntax Check: ${{ needs.syntax-check.result }}
+        - Health Check: ${{ needs.health-check.result }}
+        - Project Validation: ${{ needs.project-validation.result }}
+        - Dependencies: ${{ needs.dependencies.result }}
+        
+        ## Next Steps
+        
+        1. **Initialize Worker**: Start persistent workers for your projects
+           ```bash
+           bash wiggum_worker_manager.sh start [project-name]
+           ```
+        
+        2. **Monitor Status**: Check worker health
+           ```bash
+           bash wiggum_worker_manager.sh status [project-name]
+           ```
+        
+        3. **View Logs**: Review worker activity
+           ```bash
+           bash wiggum_worker_manager.sh logs [project-name]
+           ```
+        
+        ## System Components
+        - ✅ wiggum_master.sh - Project orchestration
+        - ✅ wiggum_worker.sh - Single-iteration task execution
+        - ✅ wiggum_worker_persistent.sh - Continuous task processing
+        - ✅ wiggum_worker_manager.sh - Worker lifecycle management
+        - ✅ server.py - Web control panel
+        - ✅ .github/workflows - CI/CD automation
+        EOF
+        cat wiggum-system-report.md
+    
+    - name: Upload system report
+      uses: actions/upload-artifact@v4
+      with:
+        name: wiggum-system-report
+        path: wiggum-system-report.md

@@ -333,6 +333,161 @@ Agent will:
 
 ---
 
+## 🎭 Agent Roles & Specialization
+
+Each project can assign a specialized **agent role** for domain-specific expertise. The agent reads `.agent_role` file and loads appropriate instructions.
+
+**Available Roles:**
+
+| Role | Purpose | Best For |
+|------|---------|----------|
+| `generic` | Full-stack developer | General development, any task |
+| `devops-engineer` | CI/CD, infrastructure | GitHub Actions, deployment, infrastructure |
+| `qa-specialist` | Testing & quality assurance | Test automation, quality gates, test coverage |
+| `release-manager` | Versioning & releases | Version bumps, releases, deployment coordination |
+| `documentation-specialist` | Technical writing | Docs, READMEs, API documentation |
+| `project-orchestrator` | Task coordination | Planning, blocking issue identification, delegation |
+
+### Setting a Project Role
+
+```bash
+# Example: Switch a project to devops-engineer for CI/CD work
+cd projects/my-project
+echo "devops-engineer" > .agent_role
+git add .agent_role
+git commit -m "ops: switch to devops-engineer for CI/CD setup"
+git push
+```
+
+**What happens next iteration:**
+- Agent reads `.agent_role`
+- Loads `AGENT_ROLES.md` (system-level role definitions)
+- Loads `/agents/devops-engineer.md` (detailed instructions)
+- Focuses on assigned specialization
+
+### Role Switching Workflow
+
+```bash
+# Example: Feature development → QA testing → Release
+
+# Phase 1: Development (generic role)
+echo "generic" > .agent_role && git add .agent_role && git commit -m "dev: switch to generic for feature work"
+
+# Phase 2: Testing (qa-specialist role)
+echo "qa-specialist" > .agent_role && git add .agent_role && git commit -m "qa: switch to qa-specialist for testing"
+
+# Phase 3: Release (release-manager role)
+echo "release-manager" > .agent_role && git add .agent_role && git commit -m "release: switch to release-manager for versioning"
+```
+
+---
+
+## 🔁 Task Resilience & Stuck Detection
+
+The worker automatically detects when a task gets stuck (no progress for multiple iterations) and implements recovery strategies.
+
+### How Stuck Detection Works
+
+**Progress Indicators** (agent checks each iteration):
+- ✅ Git commit was made
+- ✅ Files were created/modified
+- ✅ Task was marked `[x]` in TASKS.md
+- ✅ Error did NOT repeat (new error = progress)
+
+**Stuck Threshold**: 5 consecutive iterations with **zero progress**
+
+**When Stuck Detected**:
+1. Tries 3 unsticking strategies in order:
+   - **Strategy 1**: Decompose task (break into subtasks)
+   - **Strategy 2**: Skeleton files (create minimal structure)
+   - **Strategy 3**: Skip this iteration (continue on next loop)
+2. If still stuck after strategies → Moves task to `[RETRY]` queue
+3. Continues with next task, retries blocked task later
+
+### Example: Stuck Task Flow
+
+**TASKS.md (initial):**
+```markdown
+- [ ] Implement OAuth2 authentication
+- ...
+```
+
+**Iteration 1-4**: Agent tries, fails with "cryptography module not found"
+
+**Iteration 5**: Stuck detected!
+- ✅ Auto-applies: Decompose into subtasks
+- ✅ Creates:
+  ```markdown
+  - [ ] [RETRY] Implement OAuth2 authentication
+    - [ ] Find working cryptography version
+    - [ ] Create basic OAuth2 flow
+    - [ ] Add token refresh logic
+  ```
+
+**Iteration 6**: Moves to next task, will retry OAuth2 later
+
+---
+
+## 🚨 CI/CD Error Handling
+
+The worker includes **generic CI error handling** that automatically detects build/test failures and provides intelligent recovery.
+
+### How CI Error Detection Works
+
+**When a Build/Test Fails:**
+1. Worker extracts the error from previous iteration logs
+2. Shows decision tree:
+   ```
+   - Is this a CODE error? → Fix the code
+   - Is this a DEPENDENCY/VERSION error? → Update version constraint
+   - Is this an ENVIRONMENT/SETUP error? → Document as prerequisite, skip from CI
+   ```
+3. Does NOT install system tools or download large files
+4. Only modifies code, config, and dependency versions
+
+### Example: Handling Different Error Types
+
+**Error Type 1: Code Syntax Error**
+```
+Error: expected `:' found `String'
+Decision: Code error → Agent fixes the syntax
+```
+
+**Error Type 2: Missing Dependency Version**
+```
+Error: cannot find function `decode_borrowed_from_slice` in `bincode::serde`
+Decision: Version mismatch → Agent updates: bincode = "1" → bincode = "1.3"
+```
+
+**Error Type 3: Environment Setup (Python venv)**
+```
+Error: `uv venv` command fails in CI environment
+Decision: Environment setup → Mark as [CI-SKIP]
+Solution: Document in README as manual prerequisite
+```
+
+### Marking Tasks as CI-SKIP
+
+When a task requires environment setup that shouldn't be automated:
+
+```markdown
+# TASKS.md
+
+- [ ] [CI-SKIP] Python venv setup (manual prerequisite for development)
+  - Configure locally for development: `uv venv && source .venv/bin/activate`
+  - No CI runner should attempt this
+  - Document in README under "Setup" section
+
+- [ ] Implement API endpoints (this runs in CI)
+```
+
+Worker will:
+- ✅ Skip [CI-SKIP] tasks in automated loops
+- ✅ Document them as prerequisites
+- ✅ Focus on code tasks that can run in CI
+
+---
+
 ## 🛠️ Advanced Usage
 
 ### Run Master Loop in Background

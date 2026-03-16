@@ -2,6 +2,7 @@
 
 ## Current Tasks
 
+- [ ] Task 0: **SETUP GitHub Actions Workflow** (detect tech stack & create .github/workflows/test.yml) - DO THIS FIRST
 - [ ] Task 1: Project setup (initialize directories, install dependencies)
 - [ ] Task 2: Implement core feature 1
 - [ ] Task 3: Implement core feature 2

@@ -240,6 +240,171 @@
             font-size: 0.85em;
         }
         
+        .expand-btn {
+            background: transparent;
+            border: 1px solid #00ccff;
+            color: #00ccff;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            width: auto;
+        }
+        
+        .expand-btn:hover {
+            background: #00ccff;
+            color: #1a1a2e;
+        }
+        
+        .project-details {
+            display: none;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #00ccff;
+        }
+        
+        .project-details.expanded {
+            display: block;
+        }
+        
+        .details-section {
+            margin-bottom: 25px;
+        }
+        
+        .details-section h4 {
+            color: #00ff00;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            border-left: 3px solid #00ff00;
+            padding-left: 10px;
+        }
+        
+        .pipeline-stages {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .stage {
+            padding: 12px;
+            background: rgba(0, 30, 60, 0.6);
+            border: 1px solid #00ccff;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.85em;
+            overflow: hidden;
+            word-break: break-word;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stage.complete {
+            background: rgba(0, 255, 0, 0.15);
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+        
+        .stage.active {
+            background: rgba(0, 255, 255, 0.15);
+            border-color: #00ffff;
+            color: #00ffff;
+            box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.3);
+        }
+        
+        .stage.pending {
+            background: rgba(255, 255, 0, 0.1);
+            border-color: #ffff00;
+            color: #ffff99;
+        }
+        
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .agent-badge {
+            padding: 6px 10px;
+            background: rgba(0, 150, 200, 0.3);
+            border: 1px solid #00ccff;
+            border-radius: 3px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #00ccff;
+            margin-top: 8px;
+            display: inline-block;
+        }
+        
+        .agent-badge.active {
+            background: rgba(0, 255, 0, 0.15);
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+        
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 200, 255, 0.2);
+            font-size: 0.9em;
+        }
+        
+        .config-item:last-child {
+            border-bottom: none;
+        }
+        
+        .config-key {
+            color: #00ccff;
+            font-weight: bold;
+        }
+        
+        .config-value {
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+        }
+        
+        .log-viewer {
+            background: #000;
+            border: 1px solid #00ccff;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+        
+        .log-entry {
+            color: #00ff00;
+            margin-bottom: 8px;
+            padding: 5px;
+            border-left: 2px solid #00ccff;
+            padding-left: 10px;
+        }
+        
+        .log-entry.error {
+            color: #ff6666;
+            border-left-color: #ff3333;
+        }
+        
+        .log-entry.warning {
+            color: #ffff99;
+            border-left-color: #ffff00;
+        }
+        
+        .log-entry.success {
+            color: #00ff99;
+            border-left-color: #00ff00;
+        }
+        
         .message {
             padding: 15px;
             margin: 15px 0;
@@ -442,67 +607,244 @@
                 const activeContainer = document.getElementById('projectsList');
                 const completedContainer = document.getElementById('completedProjectsList');
                 
-                // Render active projects
-                if (!data.active || data.active.length === 0) {
-                    activeContainer.innerHTML = '<div class="no-projects">No active projects. Create one to get started!</div>';
-                } else {
-                    activeContainer.innerHTML = data.active.map(project => `
+                // Helper function to create project card HTML
+                function createCardHTML(project, isCompleted = false) {
+                    return `
                         <div class="project-card">
-                            <div class="project-name">${project.name}</div>
-                            
-                            <div class="project-status ${project.is_running ? 'status-running' : 'status-stopped'}">
-                                ${project.is_running ? '🟢 RUNNING' : '⚫ STOPPED'}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div class="project-name">${project.name}</div>
+                                <button class="expand-btn" onclick="toggleProjectDetails('${project.name}')">📂 Expand</button>
                             </div>
                             
-                    <div class="project-progress">
+                            <div class="project-status ${isCompleted ? '' : project.is_running ? 'status-running' : 'status-stopped'}" ${isCompleted ? 'style="background: rgba(0, 255, 0, 0.2); color: #00ff00; border: 1px solid #00ff00;"' : ''}>
+                                ${isCompleted ? '✅ COMPLETED' : project.is_running ? '🟢 RUNNING' : '⚫ STOPPED'}
+                            </div>
+                            
+                            ${project.agent_role && project.agent_role !== 'generic' ? `
+                                <div class="agent-badge active">🎭 ${project.agent_role}</div>
+                            ` : ''}
+                            
+                            <div class="project-progress">
                                 Tasks: ${project.completed}/${project.total}
                                 <div style="color: #ffff00; margin-top: 5px; font-size: 0.9em;">Iteration: ${project.iteration}</div>
                             </div>
                             
-                            ${project.current_task ? `
+                            ${project.current_task && !isCompleted ? `
                                 <div class="current-task">
                                     <strong>Current:</strong> ${project.current_task.substring(0, 60)}${project.current_task.length > 60 ? '...' : ''}
                                 </div>
                             ` : ''}
                             
                             <div class="project-actions">
-                                ${project.is_running ? 
+                                ${isCompleted ? 
+                                    `<button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>` :
+                                    project.is_running ? 
                                     `<button class="btn-small" onclick="stopProject('${project.name}')">⏹️ Stop</button>` :
                                     `<button class="btn-small" onclick="startProject('${project.name}')">▶️ Start</button>`
                                 }
                                 <button class="btn-small" onclick="viewLogs('${project.name}')">📋 Logs</button>
                             </div>
+                            
+                            <div id="details-${project.name}" class="project-details"></div>
                         </div>
-                    `).join('');
+                    `;
                 }
                 
-                // Render completed projects
+                // Update active projects (preserve expanded details)
+                if (!data.active || data.active.length === 0) {
+                    activeContainer.innerHTML = '<div class="no-projects">No active projects. Create one to get started!</div>';
+                } else {
+                    // Clear placeholder text on first load
+                    activeContainer.querySelectorAll('.no-projects').forEach(el => el.remove());
+                    
+                    // Build a map of existing cards
+                    const existingCards = new Map();
+                    activeContainer.querySelectorAll('.project-card').forEach(card => {
+                        const name = card.querySelector('.project-name').textContent;
+                        existingCards.set(name, card);
+                    });
+                    
+                    // Update each project card
+                    data.active.forEach(project => {
+                        const existing = existingCards.get(project.name);
+                        if (existing) {
+                            // Update status and progress, preserve details div
+                            const detailsDiv = existing.querySelector('.project-details');
+                            const html = createCardHTML(project, false);
+                            const temp = document.createElement('div');
+                            temp.innerHTML = html;
+                            const newCard = temp.firstElementChild;
+                            newCard.querySelector('.project-details').replaceWith(detailsDiv);
+                            existing.replaceWith(newCard);
+                            existingCards.set(project.name, newCard);
+                        } else {
+                            // Create new card
+                            const div = document.createElement('div');
+                            div.innerHTML = createCardHTML(project, false);
+                            activeContainer.appendChild(div.firstElementChild);
+                        }
+                    });
+                    
+                    // Remove cards for deleted projects
+                    const activeNames = new Set(data.active.map(p => p.name));
+                    existingCards.forEach((card, name) => {
+                        if (!activeNames.has(name)) {
+                            card.remove();
+                        }
+                    });
+                }
+                
+                // Update completed projects (preserve expanded details)
                 if (!data.completed || data.completed.length === 0) {
                     completedContainer.innerHTML = '<div class="no-projects">No completed projects yet</div>';
                 } else {
-                    completedContainer.innerHTML = data.completed.map(project => `
-                        <div class="project-card">
-                            <div class="project-name">${project.name}</div>
-                            
-                            <div class="project-status" style="background: rgba(0, 255, 0, 0.2); color: #00ff00; border: 1px solid #00ff00;">
-                                ✅ COMPLETED
-                            </div>
-                            
-                            <div class="project-progress">
-                                Tasks: ${project.completed}/${project.total} ✓
-                                <div style="color: #ffff00; margin-top: 5px; font-size: 0.9em;">Iteration: ${project.iteration}</div>
-                            </div>
-                            
-                            <div class="project-actions">
-                                <button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>
-                                <button class="btn-small" onclick="viewLogs('${project.name}')">📋 Logs</button>
-                            </div>
-                        </div>
-                    `).join('');
+                    // Clear placeholder text on first load
+                    completedContainer.querySelectorAll('.no-projects').forEach(el => el.remove());
+                    
+                    const existingCards = new Map();
+                    completedContainer.querySelectorAll('.project-card').forEach(card => {
+                        const name = card.querySelector('.project-name').textContent;
+                        existingCards.set(name, card);
+                    });
+                    
+                    data.completed.forEach(project => {
+                        const existing = existingCards.get(project.name);
+                        if (existing) {
+                            const detailsDiv = existing.querySelector('.project-details');
+                            const html = createCardHTML(project, true);
+                            const temp = document.createElement('div');
+                            temp.innerHTML = html;
+                            const newCard = temp.firstElementChild;
+                            newCard.querySelector('.project-details').replaceWith(detailsDiv);
+                            existing.replaceWith(newCard);
+                            existingCards.set(project.name, newCard);
+                        } else {
+                            const div = document.createElement('div');
+                            div.innerHTML = createCardHTML(project, true);
+                            completedContainer.appendChild(div.firstElementChild);
+                        }
+                    });
+                    
+                    const completedNames = new Set(data.completed.map(p => p.name));
+                    existingCards.forEach((card, name) => {
+                        if (!completedNames.has(name)) {
+                            card.remove();
+                        }
+                    });
                 }
             } catch (error) {
                 console.error('Error loading projects:', error);
             }
+        }
+        
+        async function toggleProjectDetails(projectName) {
+            const detailsDiv = document.getElementById(`details-${projectName}`);
+            
+            if (detailsDiv.classList.contains('expanded')) {
+                detailsDiv.classList.remove('expanded');
+                detailsDiv.innerHTML = '';
+                return;
+            }
+            
+            detailsDiv.classList.add('expanded');
+            detailsDiv.innerHTML = '<div style="text-align: center; color: #00ccff;">Loading project details...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/project-details/${projectName}`);
+                const details = await response.json();
+                
+                if (!response.ok) {
+                    detailsDiv.innerHTML = `<div style="color: #ff6666;">Error: ${details.error}</div>`;
+                    return;
+                }
+                
+                // Pipeline stages
+                const stagesHTML = `
+                    <div class="details-section">
+                        <h4>🔄 Pipeline Status</h4>
+                        <div class="pipeline-stages">
+                            <div class="stage ${details.pipeline.setup ? 'complete' : details.pipeline.current === 'setup' ? 'active' : 'pending'}">
+                                🔧 Setup
+                            </div>
+                            <div class="stage ${details.pipeline.development ? 'complete' : details.pipeline.current === 'development' ? 'active' : 'pending'}">
+                                💻 Dev
+                            </div>
+                            <div class="stage ${details.pipeline.testing ? 'complete' : details.pipeline.current === 'testing' ? 'active' : 'pending'}">
+                                🧪 Testing
+                            </div>
+                            <div class="stage ${details.pipeline.staging ? 'complete' : details.pipeline.current === 'staging' ? 'active' : 'pending'}">
+                                📦 Staging
+                            </div>
+                            <div class="stage ${details.pipeline.production ? 'complete' : details.pipeline.current === 'production' ? 'active' : 'pending'}">
+                                🚀 Prod
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Assigned agents
+                const agentsHTML = `
+                    <div class="details-section">
+                        <h4>🎯 Assigned Agents</h4>
+                        <div class="agents-grid">
+                            ${details.agents.map(agent => `
+                                <div class="agent-badge ${agent.active ? 'active' : ''}">
+                                    <div style="font-weight: bold;">${agent.name}</div>
+                                    <div style="font-size: 0.8em; opacity: 0.8;">${agent.role}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+                // Configuration
+                const configHTML = `
+                    <div class="details-section">
+                        <h4>⚙️ Configuration</h4>
+                        <div>
+                            ${details.config.map(item => `
+                                <div class="config-item">
+                                    <span class="config-key">${item.key}:</span>
+                                    <span class="config-value">${item.value}</span>
+                                </div>
+                            `).join('')}
+                            <div class="config-item">
+                                <span class="config-key">Active Agent:</span>
+                                <span class="config-value">${details.active_agent_role || 'generic'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Recent logs
+                const logsHTML = `
+                    <div class="details-section">
+                        <h4>📋 Latest Log (Iteration ${details.latest_iteration})</h4>
+                        <div class="log-viewer">
+                            ${details.latest_log.split('\n').slice(0, 30).map(line => {
+                                let cssClass = 'log-entry';
+                                if (line.includes('Error') || line.includes('❌')) cssClass += ' error';
+                                else if (line.includes('Warning') || line.includes('⚠️')) cssClass += ' warning';
+                                else if (line.includes('✅') || line.includes('Success')) cssClass += ' success';
+                                
+                                return `<div class="${cssClass}">${escapeHtml(line)}</div>`;
+                            }).join('')}
+                        </div>
+                        <button class="btn-small" onclick="viewLogs('${projectName}')" style="margin-top: 10px; width: 100%;">View Full Logs</button>
+                    </div>
+                `;
+                
+                detailsDiv.innerHTML = stagesHTML + agentsHTML + configHTML + logsHTML;
+                
+            } catch (error) {
+                detailsDiv.innerHTML = `<div style="color: #ff6666;">Error loading details: ${error.message}</div>`;
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
         async function createProject() {
@@ -544,7 +886,11 @@
         
         async function startProject(name) {
             try {
-                const response = await fetch(`${API_BASE}/start-project/${name}`, { method: 'POST' });
+                const response = await fetch(`${API_BASE}/start-project/${name}`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ agent_role: 'generic' })
+                });
                 
                 if (response.ok) {
                     loadProjects();
