@@ -1032,9 +1032,10 @@ PROMPT
     # Check for OpenCode failures
     if [ $opencode_exit -ne 0 ]; then
         echo "❌ [ERROR] OpenCode crashed with exit code: $opencode_exit"
-        echo "⚠️  Stopping worker - manual intervention needed"
+        echo "⚠️  Continuing to next iteration (will retry task)"
         echo "    Check logs/iteration-${iteration}.md for details"
-        break
+        sleep 2
+        continue
     fi
     
     # Check token limit - restart session if exhausted
