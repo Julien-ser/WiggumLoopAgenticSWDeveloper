@@ -474,18 +474,33 @@ def create_pr(project_name):
         subprocess.run(['git', 'checkout', 'wiggum/session'], cwd=project_path, capture_output=True, timeout=10)
         subprocess.run(['git', 'rebase', 'origin/main'], cwd=project_path, capture_output=True)
         
-        # Push session branch
-        subprocess.run(['git', 'push', 'origin', 'wiggum/session'], cwd=project_path, capture_output=True, timeout=30)
+        # Commit any pending changes (e.g., TASKS.md updates) — ignore if nothing to commit
+        subprocess.run(['git', 'add', '-A'], cwd=project_path, capture_output=True, timeout=10)
+        commit_res = subprocess.run(['git', 'commit', '-m', 'Finalize PR: all tasks complete'], cwd=project_path, capture_output=True, text=True, timeout=10)
+        if commit_res.returncode != 0:
+            # Likely nothing to commit; continue
+            pass
         
-        # Check if PR already exists
-        existing = subprocess.run(['gh', 'pr', 'list', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'number', '-q', '.[0].number'], capture_output=True, text=True, timeout=10).stdout.strip()
+        # Push session branch
+        push_res = subprocess.run(['git', 'push', 'origin', 'wiggum/session'], cwd=project_path, capture_output=True, text=True, timeout=30)
+        if push_res.returncode != 0:
+            return jsonify({'error': f'Failed to push wiggum/session: {push_res.stderr}'}), 500
+        
+        # Check if PR already exists (open or closed)
+        existing = subprocess.run(['gh', 'pr', 'list', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'number,state', '-q', '.[0].number'], cwd=project_path, capture_output=True, text=True, timeout=10).stdout.strip()
         if existing:
             return jsonify({'status': 'pr_already_exists', 'pr_number': existing, 'repo': f'{owner}/{project_name}'})
         
-        # Create PR
-        pr_url = subprocess.run(['gh', 'pr', 'create', '--fill', '--base', 'main', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'url', '-q', '.url'], capture_output=True, text=True, timeout=10).stdout.strip()
+        # Create PR (no --json support)
+        create_res = subprocess.run(['gh', 'pr', 'create', '--fill', '--base', 'main', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}'], cwd=project_path, capture_output=True, text=True, timeout=10)
+        if create_res.returncode != 0:
+            return jsonify({'error': f'gh pr create failed: {create_res.stderr.strip()}'}), 500
+        
+        # Check if PR was created
+        pr_check = subprocess.run(['gh', 'pr', 'list', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'url', '-q', '.[0].url'], cwd=project_path, capture_output=True, text=True, timeout=10)
+        pr_url = pr_check.stdout.strip()
         if not pr_url:
-            return jsonify({'error': 'Failed to create PR'}), 500
+            return jsonify({'error': 'PR creation succeeded but could not fetch PR URL. Check gh auth and repo permissions.'}), 500
         
         return jsonify({'status': 'pr_created', 'pr_url': pr_url, 'repo': f'{owner}/{project_name}'})
     except subprocess.CalledProcessError as e:

@@ -1,0 +1,6 @@
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - ".*"  # Allow all branches
+  review_status: false  # Disable the status message about auto-review being disabled
