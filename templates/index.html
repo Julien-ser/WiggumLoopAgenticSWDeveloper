@@ -361,8 +361,8 @@
                             
                             <div class="project-actions">
                                 ${isCompleted ? 
-                                    `<button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>
-                                     <button class="btn-small" onclick="syncBranches('${project.name}')">🔄 Sync</button>
+                                    `<button class="btn-small" onclick="createPR('${project.name}')">✅ Create PR</button>
+                                     <button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>
                                      <button class="btn-small" onclick="viewLogs('${project.name}')">📋 Logs</button>` :
                                     project.is_running ? 
                                     `<button class="btn-small" onclick="stopProject('${project.name}')">⏹️ Stop</button>` :
@@ -669,6 +669,24 @@
                 
                 if (response.ok) {
                     alert(`✓ ${result.message}\n\nWorker PID: ${result.pid}`);
+                    loadProjects();
+                } else {
+                    alert(`❌ ${result.error}`);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function createPR(name) {
+            if (!confirm(`Create PR from wiggum/session to main for "${name}"?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/project/${name}/create-pr`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`✓ ${result.status === 'pr_created' ? 'PR created' : 'PR already exists'}: ${result.pr_url || result.pr_number}\nRepo: ${result.repo}`);
                     loadProjects();
                 } else {
                     alert(`❌ ${result.error}`);

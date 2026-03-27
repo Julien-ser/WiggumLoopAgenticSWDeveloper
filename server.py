@@ -444,6 +444,55 @@ def sync_project_branches(project_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/project/<project_name>/create-pr', methods=['POST'])
+def create_pr(project_name):
+    """Force create a PR from wiggum/session to main. Useful if PR was not auto-created."""
+    project_path = os.path.join(MASTER_DIR, 'projects', project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': f'Project "{project_name}" not found'}), 404
+    
+    try:
+        # Determine GitHub owner from git remote
+        try:
+            remote_url = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=project_path, capture_output=True, text=True, timeout=5).stdout.strip()
+            if remote_url.startswith('https://github.com/'):
+                owner = remote_url.split('/')[3]
+            elif remote_url.startswith('git@github.com:'):
+                owner = remote_url.split(':')[1].split('/')[0]
+            else:
+                import re
+                m = re.search(r'github\.com[:/]([^/]+)/', remote_url)
+                owner = m.group(1) if m else None
+        except Exception as e:
+            return jsonify({'error': f'Could not determine GitHub repo owner: {str(e)}'}), 500
+        
+        if not owner:
+            return jsonify({'error': 'Unable to parse GitHub owner from remote origin'}), 500
+        
+        # Ensure we're on wiggum/session and up-to-date with main
+        subprocess.run(['git', 'fetch', 'origin', 'main'], cwd=project_path, capture_output=True, timeout=10)
+        subprocess.run(['git', 'checkout', 'wiggum/session'], cwd=project_path, capture_output=True, timeout=10)
+        subprocess.run(['git', 'rebase', 'origin/main'], cwd=project_path, capture_output=True)
+        
+        # Push session branch
+        subprocess.run(['git', 'push', 'origin', 'wiggum/session'], cwd=project_path, capture_output=True, timeout=30)
+        
+        # Check if PR already exists
+        existing = subprocess.run(['gh', 'pr', 'list', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'number', '-q', '.[0].number'], capture_output=True, text=True, timeout=10).stdout.strip()
+        if existing:
+            return jsonify({'status': 'pr_already_exists', 'pr_number': existing, 'repo': f'{owner}/{project_name}'})
+        
+        # Create PR
+        pr_url = subprocess.run(['gh', 'pr', 'create', '--fill', '--base', 'main', '--head', 'wiggum/session', '--repo', f'{owner}/{project_name}', '--json', 'url', '-q', '.url'], capture_output=True, text=True, timeout=10).stdout.strip()
+        if not pr_url:
+            return jsonify({'error': 'Failed to create PR'}), 500
+        
+        return jsonify({'status': 'pr_created', 'pr_url': pr_url, 'repo': f'{owner}/{project_name}'})
+    except subprocess.CalledProcessError as e:
+        return jsonify({'error': str(e), 'details': e.stderr}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/project/<project_name>/cleanup-session-branches', methods=['POST'])
 def cleanup_session_branches(project_name):
     """Delete all local and remote branches matching 'wiggum/session-*' except the current 'wiggum/session' if it exists."""
