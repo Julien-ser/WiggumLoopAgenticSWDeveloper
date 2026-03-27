@@ -330,6 +330,39 @@ def push_project(project_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/project/<project_name>/trigger_coderabbit', methods=['POST'])
+def trigger_coderabbit(project_name):
+    """Trigger a CodeRabbit review by appending a timestamp to a touch file and pushing to PR branch"""
+    project_path = os.path.join(MASTER_DIR, 'projects', project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': f'Project "{project_name}" not found'}), 404
+    try:
+        # Find open PR's head branch for this repo
+        result = subprocess.run(
+            ['gh', 'pr', 'list', '--repo', f'Julien-ser/{project_name}', '--json', 'headRefName', '-q', '.[0].headRefName'],
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        head_ref = result.stdout.strip()
+        if not head_ref:
+            return jsonify({'error': 'No open PR found'}), 404
+        # Checkout that branch
+        subprocess.run(['git', 'checkout', head_ref], cwd=project_path, check=True, capture_output=True)
+        # Append timestamp to a trigger file to ensure code change
+        trigger_file = os.path.join(project_path, '.coderabbit_trigger.log')
+        with open(trigger_file, 'a') as f:
+            f.write(f"Triggered at: {subprocess.run(['date'], capture_output=True, text=True).stdout}")
+        subprocess.run(['git', 'add', trigger_file], cwd=project_path, check=True, capture_output=True)
+        subprocess.run(['git', 'commit', '-m', 'Trigger CodeRabbit review'], cwd=project_path, check=True, capture_output=True)
+        subprocess.run(['git', 'push', 'origin', head_ref], cwd=project_path, check=True, capture_output=True)
+        return jsonify({'status': 'triggered', 'branch': head_ref})
+    except subprocess.CalledProcessError as e:
+        return jsonify({'error': str(e), 'details': e.stderr}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/logs/<project_name>', methods=['GET'])
 def get_logs(project_name):
     """Get iteration logs for a project"""

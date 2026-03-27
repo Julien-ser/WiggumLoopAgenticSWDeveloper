@@ -216,7 +216,7 @@ create_project() {
     # Copy template
     cp -r "$TEMPLATE_DIR" "$project_path"
     
-    # Copy GitHub Actions workflows
+    # Copy GitHub Actions workflows (including ai-review.yml) to every new project
     if [ -d "${MASTER_DIR}/.github/workflows" ]; then
         mkdir -p "${project_path}/.github/workflows"
         cp "${MASTER_DIR}/.github/workflows"/*.yml "${project_path}/.github/workflows/" 2>/dev/null || true
