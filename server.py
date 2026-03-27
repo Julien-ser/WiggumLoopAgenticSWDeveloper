@@ -337,9 +337,27 @@ def trigger_coderabbit(project_name):
     if not os.path.exists(project_path):
         return jsonify({'error': f'Project "{project_name}" not found'}), 404
     try:
-        # Find open PR's head branch for this repo
+        # Determine GitHub owner from git remote (supports https and ssh)
+        try:
+            remote_url = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=project_path, capture_output=True, text=True, timeout=5).stdout.strip()
+            if remote_url.startswith('https://github.com/'):
+                owner = remote_url.split('/')[3]
+            elif remote_url.startswith('git@github.com:'):
+                owner = remote_url.split(':')[1].split('/')[0]
+            else:
+                # Fallback: try to extract owner from any github.com URL
+                import re
+                m = re.search(r'github\.com[:/]([^/]+)/', remote_url)
+                owner = m.group(1) if m else None
+        except Exception as e:
+            return jsonify({'error': f'Could not determine GitHub repo owner: {str(e)}'}), 500
+
+        if not owner:
+            return jsonify({'error': 'Unable to parse GitHub owner from remote origin'}), 500
+
+        # Find open PR for this repo (prefer PRs from wiggum session branches)
         result = subprocess.run(
-            ['gh', 'pr', 'list', '--repo', f'Julien-ser/{project_name}', '--json', 'headRefName', '-q', '.[0].headRefName'],
+            ['gh', 'pr', 'list', '--repo', f'{owner}/{project_name}', '--json', 'headRefName,number', '-q', '.[0].headRefName'],
             cwd=project_path,
             capture_output=True,
             text=True,
@@ -347,9 +365,18 @@ def trigger_coderabbit(project_name):
         )
         head_ref = result.stdout.strip()
         if not head_ref:
-            return jsonify({'error': 'No open PR found'}), 404
-        # Checkout that branch
-        subprocess.run(['git', 'checkout', head_ref], cwd=project_path, check=True, capture_output=True)
+            return jsonify({'error': 'No open PR found. Create a PR before triggering CodeRabbit.'}), 404
+
+        # Ensure branch is up-to-date with main before triggering
+        try:
+            subprocess.run(['git', 'fetch', 'origin', 'main'], cwd=project_path, capture_output=True, timeout=10)
+            subprocess.run(['git', 'checkout', head_ref], cwd=project_path, check=True, capture_output=True)
+            # Rebase onto latest main to keep PR in sync
+            subprocess.run(['git', 'rebase', 'origin/main'], cwd=project_path, capture_output=True)
+        except subprocess.CalledProcessError as rebase_e:
+            # If rebase fails, continue anyway; push may fail but we'll report error later
+            pass
+
         # Append timestamp to a trigger file to ensure code change
         trigger_file = os.path.join(project_path, '.coderabbit_trigger.log')
         with open(trigger_file, 'a') as f:
@@ -357,7 +384,61 @@ def trigger_coderabbit(project_name):
         subprocess.run(['git', 'add', trigger_file], cwd=project_path, check=True, capture_output=True)
         subprocess.run(['git', 'commit', '-m', 'Trigger CodeRabbit review'], cwd=project_path, check=True, capture_output=True)
         subprocess.run(['git', 'push', 'origin', head_ref], cwd=project_path, check=True, capture_output=True)
-        return jsonify({'status': 'triggered', 'branch': head_ref})
+        return jsonify({'status': 'triggered', 'branch': head_ref, 'repo': f'{owner}/{project_name}'})
+    except subprocess.CalledProcessError as e:
+        return jsonify({'error': str(e), 'details': e.stderr}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/project/<project_name>/sync-branches', methods=['POST'])
+def sync_project_branches(project_name):
+    """Rebase all non-main branches onto origin/main and push them. Useful for completed projects with many stale branches."""
+    project_path = os.path.join(MASTER_DIR, 'projects', project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': f'Project "{project_name}" not found'}), 404
+    
+    try:
+        # Fetch latest main
+        fetch_res = subprocess.run(['git', 'fetch', 'origin', 'main'], cwd=project_path, capture_output=True, text=True, timeout=30)
+        if fetch_res.returncode != 0:
+            return jsonify({'error': f'Failed to fetch origin/main: {fetch_res.stderr}'}), 500
+        
+        # Get list of local branches except main
+        branches = subprocess.run(['git', 'branch', '--list'], cwd=project_path, capture_output=True, text=True, timeout=10).stdout.strip().split('\n')
+        branches = [b.strip().lstrip('* ') for b in branches if b.strip() and b.strip() != '* main' and b.strip() != 'main']
+        
+        if not branches:
+            return jsonify({'message': 'No branches to sync (only main exists)'}), 200
+        
+        results = []
+        for branch in branches:
+            try:
+                # Checkout branch
+                subprocess.run(['git', 'checkout', branch], cwd=project_path, capture_output=True, timeout=10)
+                # Rebase onto origin/main
+                rebase_res = subprocess.run(['git', 'rebase', 'origin/main'], cwd=project_path, capture_output=True, text=True, timeout=60)
+                if rebase_res.returncode != 0:
+                    results.append({'branch': branch, 'status': 'rebase_failed', 'error': rebase_res.stderr})
+                    # Try to abort rebase to leave clean state
+                    subprocess.run(['git', 'rebase', '--abort'], cwd=project_path, capture_output=True)
+                    continue
+                # Push rebased branch
+                push_res = subprocess.run(['git', 'push', 'origin', branch], cwd=project_path, capture_output=True, text=True, timeout=30)
+                if push_res.returncode != 0:
+                    results.append({'branch': branch, 'status': 'push_failed', 'error': push_res.stderr})
+                else:
+                    results.append({'branch': branch, 'status': 'synced'})
+            except subprocess.CalledProcessError as e:
+                results.append({'branch': branch, 'status': 'error', 'error': str(e)})
+        
+        # Return to main
+        subprocess.run(['git', 'checkout', 'main'], cwd=project_path, capture_output=True)
+        
+        synced_count = sum(1 for r in results if r['status'] == 'synced')
+        return jsonify({
+            'message': f'Synced {synced_count}/{len(branches)} branches',
+            'branches': results
+        })
     except subprocess.CalledProcessError as e:
         return jsonify({'error': str(e), 'details': e.stderr}), 500
     except Exception as e:
