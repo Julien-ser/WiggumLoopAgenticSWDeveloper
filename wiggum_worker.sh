@@ -591,10 +591,14 @@ while true; do
     fi
     
     if [ ${#next_task} -lt 5 ]; then
-        echo "⚠️  [WARNING] Task too short or malformed: '$next_task'"
-        echo "⏭️  Skipping to next iteration..."
-        sleep 2
-        continue
+        # Only skip if next_task is non-empty; empty means all tasks done, proceed to PR handling
+        if [ -n "$next_task" ]; then
+            echo "⚠️  [WARNING] Task too short or malformed: '$next_task'"
+            echo "⏭️  Skipping to next iteration..."
+            sleep 2
+            continue
+        fi
+        # else: empty task (all done) -> fall through to PR creation
     fi
 
     # ====================================================================
