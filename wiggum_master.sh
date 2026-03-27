@@ -150,7 +150,8 @@ Format:
     # Check if we got markdown output
     if grep -q "^#" "$temp_output" 2>/dev/null; then
         # Extract markdown section
-        sed -n '/^#/,$p' "$temp_output" > "${project_path}/TASKS.md"
+        # Extract markdown section and keep only headings and proper checklist items
+        sed -n '/^#/,$p' "$temp_output" | grep -E '^(#|##|###|- \[ |- \[x\]|\s*$)' > "${project_path}/TASKS.md"
         success "Generated TASKS.md for $project_name"
     elif [ -s "$temp_output" ] && ! grep -q "Error\|error\|not found" "$temp_output"; then
         # Output looks valid but no header, save as-is

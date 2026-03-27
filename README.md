@@ -2,7 +2,28 @@
 
 > **Zero-cost, fully autonomous multi-project AI development.** Orchestrate unlimited OpenCode agents running free LLMs to build, test, and ship software—without writing a single line of code yourself.
 
-![Wiggum UI](./ui.png)
+
+<!-- UI Overview -->
+![Wiggum Full Interface Overview (ui3.png)](./ui3.png)
+<p align="center"><i>WiggumLoop: Full system UI overview (ui3.png)</i></p>
+
+<!-- Optionally keep the old screenshot for reference -->
+<!-- ![Wiggum UI](./ui.png) -->
+---
+
+## 🖼️ User Interface
+
+WiggumLoop comes with a visual dashboard for monitoring and controlling projects. Below are detailed UI screenshots:
+
+<p align="center">
+    <img src="./ui1.png" alt="Project UI Detail 1" width="48%"/>
+    <img src="./ui2.png" alt="Project UI Detail 2" width="48%"/>
+</p>
+<p align="center"><i>Detailed project views: left (ui1.png), right (ui2.png)</i></p>
+
+The main overview (see top) shows the entire orchestration system, while these detailed views focus on individual project management and status.
+
+---
 
 ---
 
