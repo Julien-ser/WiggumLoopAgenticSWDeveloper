@@ -444,6 +444,66 @@ def sync_project_branches(project_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/project/<project_name>/cleanup-session-branches', methods=['POST'])
+def cleanup_session_branches(project_name):
+    """Delete all local and remote branches matching 'wiggum/session-*' except the current 'wiggum/session' if it exists."""
+    project_path = os.path.join(MASTER_DIR, 'projects', project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': f'Project "{project_name}" not found'}), 404
+    
+    try:
+        # Fetch latest refs
+        subprocess.run(['git', 'fetch', 'origin', '--prune'], cwd=project_path, capture_output=True, timeout=30)
+        
+        # Get all local branches
+        all_branches = subprocess.run(['git', 'branch', '--list', '--all'], cwd=project_path, capture_output=True, text=True, timeout=10).stdout.strip().split('\n')
+        # Parse branch names, including remotes
+        to_delete_local = []
+        to_delete_remote = []
+        current_branch = subprocess.run(['git', 'branch', '--show-current'], cwd=project_path, capture_output=True, text=True, timeout=5).stdout.strip()
+        
+        for line in all_branches:
+            line = line.strip()
+            if not line:
+                continue
+            # Handle both local and remote refs
+            if line.startswith('remotes/origin/'):
+                branch = line.replace('remotes/origin/', '')
+                if branch.startswith('wiggum/session-') and branch != 'wiggum/session':
+                    to_delete_remote.append(branch)
+            else:
+                # Local branch (may have * prefix)
+                branch = line.lstrip('* ')
+                if branch.startswith('wiggum/session-') and branch != 'wiggum/session':
+                    to_delete_local.append(branch)
+        
+        results = []
+        # Delete local branches
+        for branch in to_delete_local:
+            try:
+                subprocess.run(['git', 'branch', '-D', branch], cwd=project_path, capture_output=True, timeout=10)
+                results.append({'branch': branch, 'scope': 'local', 'status': 'deleted'})
+            except subprocess.CalledProcessError as e:
+                results.append({'branch': branch, 'scope': 'local', 'status': 'failed', 'error': e.stderr})
+        
+        # Delete remote branches
+        for branch in to_delete_remote:
+            try:
+                subprocess.run(['git', 'push', 'origin', '--delete', branch], cwd=project_path, capture_output=True, timeout=30)
+                results.append({'branch': branch, 'scope': 'remote', 'status': 'deleted'})
+            except subprocess.CalledProcessError as e:
+                results.append({'branch': branch, 'scope': 'remote', 'status': 'failed', 'error': e.stderr})
+        
+        deleted_count = sum(1 for r in results if r['status'] == 'deleted')
+        return jsonify({
+            'message': f'Cleaned up {deleted_count}/{len(results)} session branches',
+            'cleaned': results
+        })
+    except subprocess.CalledProcessError as e:
+        return jsonify({'error': str(e), 'details': e.stderr}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/logs/<project_name>', methods=['GET'])
 def get_logs(project_name):
     """Get iteration logs for a project"""

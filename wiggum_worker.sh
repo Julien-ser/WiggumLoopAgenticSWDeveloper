@@ -252,13 +252,10 @@ fi
 # Switch to main and ensure up-to-date, then create a session branch for PR workflow
 git checkout main 2>/dev/null || git checkout -b main
 git pull origin main --rebase 2>/dev/null || true
-SESSION_BRANCH="wiggum/session-$(date +%s)"
-if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
-    echo "🔀 Created session branch: $SESSION_BRANCH"
-else
-    echo "⚠️  Branch $SESSION_BRANCH already exists, switching to it"
-    git checkout "$SESSION_BRANCH"
-fi
+SESSION_BRANCH="wiggum/session"
+# Force-create/reset session branch to a clean state from origin/main
+git checkout -B "$SESSION_BRANCH" origin/main 2>/dev/null || git checkout -b "$SESSION_BRANCH"
+echo "🔀 Using session branch: $SESSION_BRANCH"
 
 PR_CREATED=0
 PR_NUMBER=""

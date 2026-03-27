@@ -638,7 +638,8 @@
                             <div class="project-actions">
                                 ${isCompleted ? 
                                     `<button class="btn-small" onclick="pushProject('${project.name}')">🚀 Run Checks & Push</button>
-                                     <button class="btn-small" onclick="syncBranches('${project.name}')">🔄 Sync Branches</button>` :
+                                     <button class="btn-small" onclick="syncBranches('${project.name}')">🔄 Sync Branches</button>
+                                     <button class="btn-small" onclick="cleanupBranches('${project.name}')">🗑️ Cleanup Old Branches</button>` :
                                     project.is_running ? 
                                     `<button class="btn-small" onclick="stopProject('${project.name}')">⏹️ Stop</button>` :
                                     `<button class="btn-small" onclick="startProject('${project.name}')">▶️ Start</button>`
@@ -946,6 +947,25 @@
                 
                 if (response.ok) {
                     const msg = result.message + '\n\nBranches: ' + result.branches.map(b => `${b.branch} → ${b.status}`).join('\n');
+                    alert(`✓ ${msg}`);
+                    loadProjects();
+                } else {
+                    alert(`❌ ${result.error}`);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function cleanupBranches(name) {
+            if (!confirm(`Delete all old wiggum/session-* branches for "${name}"? This cannot be undone.`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/project/${name}/cleanup-session-branches`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const msg = result.message + '\n\nCleaned: ' + result.cleaned.map(c => `${c.branch} (${c.scope})`).join('\n');
                     alert(`✓ ${msg}`);
                     loadProjects();
                 } else {
