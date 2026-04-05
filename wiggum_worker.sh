@@ -74,6 +74,29 @@ exec_with_sanitization() {
     return ${PIPESTATUS[0]}
 }
 
+# Push with automatic rebase on stale branch errors
+# Usage: git_push_with_rebase_retry <branch>
+# Returns 0 on success, 1 on failure after retry
+git_push_with_rebase_retry() {
+    local branch="$1"
+    if git push origin "$branch"; then
+        return 0
+    fi
+    echo "⚠️  Push failed (likely stale branch). Attempting git pull --rebase..."
+    if git pull --rebase origin "$branch"; then
+        if git push origin "$branch"; then
+            echo "✅ Push succeeded after rebase"
+            return 0
+        else
+            echo "⚠️  Push still failed after rebase"
+            return 1
+        fi
+    else
+        echo "⚠️  Rebase failed. Resolve conflicts manually, then run: git rebase --continue && git push origin $branch"
+        return 1
+    fi
+}
+
 if [ ! -d "$PROJECT_PATH" ]; then
     echo "❌ Project path does not exist: $PROJECT_PATH"
     exit 1
@@ -1101,10 +1124,11 @@ PROMPT
     # Now commit if there are changes
     if git commit -m "Iteration $iteration: $next_task" > /dev/null 2>&1; then
         echo "✅ Changes committed"
-        if git push origin "$SESSION_BRANCH"; then
+        if git_push_with_rebase_retry "$SESSION_BRANCH"; then
             echo "✅ Pushed to GitHub (branch: $SESSION_BRANCH)"
         else
-            echo "⚠️  Could not push to GitHub"
+            echo "❌ Push failed after retry. Stopping worker to avoid state issues. Resolve git conflicts manually, then restart."
+            break
         fi
     else
         echo "ℹ️  No changes to commit"
@@ -1133,7 +1157,7 @@ PROMPT
                 echo "ℹ️ No uncommitted changes to push"
             else
                 if git commit -m "Final worker session push"; then
-                    if git push origin "$SESSION_BRANCH"; then
+                    if git_push_with_rebase_retry "$SESSION_BRANCH"; then
                         echo "✅ Final push to GitHub successful (branch: $SESSION_BRANCH)"
                         PR_URL=$(gh pr create --fill --base main --head "$SESSION_BRANCH" --json url -q .url 2>/dev/null)
                         if [ -n "$PR_URL" ]; then
@@ -1149,7 +1173,8 @@ PROMPT
                             echo "⚠️  Could not create pull request"
                         fi
                     else
-                        echo "⚠️  Final push to GitHub failed"
+                        echo "❌ Final push to GitHub failed after retry. Stopping worker; resolve git issues manually, then restart."
+                        break
                     fi
                 fi
             fi
@@ -1161,17 +1186,17 @@ PROMPT
                 echo "✅ PR $PR_NUMBER merged."
                 break
             fi
-            CR_REVIEW_STATE=$(gh api repos/$FULL_REPO/pulls/$PR_NUMBER/reviews --jq '.[] | select(.user.login=="CodeRabbit") | .state' 2>/dev/null | head -1)
+            CR_REVIEW_STATE=$(gh api repos/$FULL_REPO/pulls/$PR_NUMBER/reviews --jq '.[] | select(.user.login=="pr-agent") | .state' 2>/dev/null | head -1)
             if [ "$CR_REVIEW_STATE" = "CHANGES_REQUESTED" ]; then
-                echo "⚠️ CodeRabbit requested changes. Adding feedback task..."
+                echo "⚠️ PR-Agent requested changes. Adding feedback task..."
                 {
                     echo ""
-                    echo "## CodeRabbit Feedback"
-                    echo "- [ ] Address CodeRabbit feedback on PR #$PR_NUMBER"
+                    echo "## PR-Agent Feedback"
+                    echo "- [ ] Address PR-Agent feedback on PR #$PR_NUMBER"
                 } >> TASKS.md
                 git add TASKS.md
-                git commit -m "chore: add CodeRabbit feedback task for PR #$PR_NUMBER" || true
-                git push origin "$SESSION_BRANCH" || true
+                git commit -m "chore: add PR-Agent feedback task for PR #$PR_NUMBER" || true
+                git_push_with_rebase_retry "$SESSION_BRANCH" || true
             fi
         fi
     fi

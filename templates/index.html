@@ -523,12 +523,12 @@
                     </div>
                 `;
                 
-                // Actions panel (CodeRabbit, Sync, Cleanup, Push)
+                // Actions panel (PR-Agent, Sync, Cleanup, Push)
                 const actionsHTML = `
                     <div class="details-section">
                         <h4>🔧 Actions</h4>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button class="btn-small" onclick="triggerCodeRabbit('${projectName}')">🐰 Trigger CodeRabbit</button>
+                            <button class="btn-small" onclick="triggerCodeRabbit('${projectName}')">🤖 Trigger PR-Agent</button>
                             <button class="btn-small" onclick="syncBranches('${projectName}')">🔄 Sync Branches</button>
                             <button class="btn-small" onclick="cleanupBranches('${projectName}')">🗑️ Cleanup Old Branches</button>
                             ${isCompleted ? `<button class="btn-small" onclick="pushProject('${projectName}')">🚀 Run Checks & Push</button>` : ''}
@@ -697,14 +697,14 @@
         }
         
         async function triggerCodeRabbit(name) {
-            if (!confirm(`Trigger CodeRabbit review for "${name}"? This will push a trigger commit to the PR branch.`)) return;
+            if (!confirm(`Trigger PR-Agent review for "${name}"? This will push a trigger commit to the PR branch.`)) return;
             
             try {
                 const response = await fetch(`${API_BASE}/project/${name}/trigger_coderabbit`, { method: 'POST' });
                 const result = await response.json();
                 
                 if (response.ok) {
-                    alert(`✓ CodeRabbit review triggered on branch: ${result.branch}\nRepo: ${result.repo}`);
+                    alert(`✓ PR-Agent review triggered on branch: ${result.branch}\nRepo: ${result.repo}`);
                     loadProjects();
                 } else {
                     alert(`❌ ${result.error}`);

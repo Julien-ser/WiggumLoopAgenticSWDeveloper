@@ -332,7 +332,7 @@ def push_project(project_name):
 
 @app.route('/api/project/<project_name>/trigger_coderabbit', methods=['POST'])
 def trigger_coderabbit(project_name):
-    """Trigger a CodeRabbit review by appending a timestamp to a touch file and pushing to PR branch"""
+    """Trigger a PR-Agent review by appending a timestamp to a trigger file and pushing to PR branch"""
     project_path = os.path.join(MASTER_DIR, 'projects', project_name)
     if not os.path.exists(project_path):
         return jsonify({'error': f'Project "{project_name}" not found'}), 404
@@ -365,7 +365,7 @@ def trigger_coderabbit(project_name):
         )
         head_ref = result.stdout.strip()
         if not head_ref:
-            return jsonify({'error': 'No open PR found. Create a PR before triggering CodeRabbit.'}), 404
+            return jsonify({'error': 'No open PR found. Create a PR before triggering PR-Agent.'}), 404
 
         # Ensure branch is up-to-date with main before triggering
         try:
@@ -378,11 +378,11 @@ def trigger_coderabbit(project_name):
             pass
 
         # Append timestamp to a trigger file to ensure code change
-        trigger_file = os.path.join(project_path, '.coderabbit_trigger.log')
+        trigger_file = os.path.join(project_path, '.pr_agent_trigger.log')
         with open(trigger_file, 'a') as f:
             f.write(f"Triggered at: {subprocess.run(['date'], capture_output=True, text=True).stdout}")
         subprocess.run(['git', 'add', trigger_file], cwd=project_path, check=True, capture_output=True)
-        subprocess.run(['git', 'commit', '-m', 'Trigger CodeRabbit review'], cwd=project_path, check=True, capture_output=True)
+        subprocess.run(['git', 'commit', '-m', 'Trigger PR-Agent review'], cwd=project_path, check=True, capture_output=True)
         subprocess.run(['git', 'push', 'origin', head_ref], cwd=project_path, check=True, capture_output=True)
         return jsonify({'status': 'triggered', 'branch': head_ref, 'repo': f'{owner}/{project_name}'})
     except subprocess.CalledProcessError as e:

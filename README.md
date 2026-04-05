@@ -377,7 +377,7 @@ Features:
 - Real-time project status
 - Create/stop/start projects from UI
 - View logs inline
-- Trigger CodeRabbit reviews
+- Trigger PR-Agent reviews
 
 ### Background Operation
 

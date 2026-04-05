@@ -1,0 +1,6 @@
+# PR-Agent (Qodo Merge) configuration
+# https://qodo-merge.ai/docs/configuration/
+
+[config]
+model = "openrouter/stepfun/step-3.5-flash:free"
+# No fallbacks; only use the OpenRouter key provided via OPENROUTER__KEY
