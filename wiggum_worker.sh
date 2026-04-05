@@ -276,9 +276,14 @@ fi
 git checkout main 2>/dev/null || git checkout -b main
 git pull origin main --rebase 2>/dev/null || true
 SESSION_BRANCH="wiggum/session"
-# Force-create/reset session branch to a clean state from origin/main
-git checkout -B "$SESSION_BRANCH" origin/main 2>/dev/null || git checkout -b "$SESSION_BRANCH"
-echo "🔀 Using session branch: $SESSION_BRANCH"
+# Checkout existing session branch if present, else create from main (preserves local progress)
+if git show-ref --verify --quiet "refs/heads/$SESSION_BRANCH"; then
+    git checkout "$SESSION_BRANCH"
+    echo "🔀 Using existing session branch: $SESSION_BRANCH"
+else
+    git checkout -b "$SESSION_BRANCH" origin/main
+    echo "🔀 Created new session branch: $SESSION_BRANCH"
+fi
 
 PR_CREATED=0
 PR_NUMBER=""
