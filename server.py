@@ -8,6 +8,7 @@ import os
 import json
 import subprocess
 import re
+import shutil
 import tempfile
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
@@ -332,59 +333,85 @@ def push_project(project_name):
 
 @app.route('/api/project/<project_name>/trigger_coderabbit', methods=['POST'])
 def trigger_coderabbit(project_name):
-    """Trigger a PR-Agent review by appending a timestamp to a trigger file and pushing to PR branch"""
+    """Trigger PR-Agent review by running the CLI directly (no GitHub Actions needed)"""
     project_path = os.path.join(MASTER_DIR, 'projects', project_name)
     if not os.path.exists(project_path):
         return jsonify({'error': f'Project "{project_name}" not found'}), 404
     try:
-        # Determine GitHub owner from git remote (supports https and ssh)
+        # Determine GitHub owner/repo from git remote
         try:
             remote_url = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=project_path, capture_output=True, text=True, timeout=5).stdout.strip()
             if remote_url.startswith('https://github.com/'):
                 owner = remote_url.split('/')[3]
+                repo = remote_url.split('/')[4].rstrip('.git')
             elif remote_url.startswith('git@github.com:'):
-                owner = remote_url.split(':')[1].split('/')[0]
+                owner_repo = remote_url.split(':')[1]
+                owner, repo = owner_repo.split('/')[:2]
+                repo = repo.rstrip('.git')
             else:
-                # Fallback: try to extract owner from any github.com URL
                 import re
-                m = re.search(r'github\.com[:/]([^/]+)/', remote_url)
-                owner = m.group(1) if m else None
+                m = re.search(r'github\.com[:/]([^/]+)/([^/]+)', remote_url)
+                if m:
+                    owner, repo = m.group(1), m.group(2).rstrip('.git')
+                else:
+                    owner = repo = None
         except Exception as e:
-            return jsonify({'error': f'Could not determine GitHub repo owner: {str(e)}'}), 500
+            return jsonify({'error': f'Could not parse GitHub remote: {str(e)}'}), 500
 
-        if not owner:
-            return jsonify({'error': 'Unable to parse GitHub owner from remote origin'}), 500
+        if not owner or not repo:
+            return jsonify({'error': 'Unable to determine GitHub owner/repo from remote origin'}), 500
 
-        # Find open PR for this repo (prefer PRs from wiggum session branches)
+        full_repo = f'{owner}/{repo}'
+
+        # Find open PR for this repo from wiggum/session branch to get PR number
         result = subprocess.run(
-            ['gh', 'pr', 'list', '--repo', f'{owner}/{project_name}', '--json', 'headRefName,number', '-q', '.[0].headRefName'],
+            ['gh', 'pr', 'list', '--repo', full_repo, '--head', 'wiggum/session', '--json', 'number', '-q', '.[0].number'],
             cwd=project_path,
             capture_output=True,
             text=True,
             timeout=10
         )
-        head_ref = result.stdout.strip()
-        if not head_ref:
-            return jsonify({'error': 'No open PR found. Create a PR before triggering PR-Agent.'}), 404
+        pr_number = result.stdout.strip()
+        if not pr_number:
+            return jsonify({'error': 'No open PR found from wiggum/session. Create a PR first.'}), 404
 
-        # Ensure branch is up-to-date with main before triggering
+        # Prepare environment with OpenRouter key
+        env = os.environ.copy()
+        # Load OPENROUTER_API_KEY from master .env if not already in env
+        if 'OPENROUTER_API_KEY' not in env:
+            dotenv_path = os.path.join(MASTER_DIR, '.env')
+            if os.path.exists(dotenv_path):
+                with open(dotenv_path) as f:
+                    for line in f:
+                        if line.startswith('OPENROUTER_API_KEY='):
+                            key_val = line.strip().split('=', 1)[1]
+                            key_val = key_val.strip('"\'')
+                            env['OPENROUTER_API_KEY'] = key_val
+                            break
+        # Also set OPENROUTER__KEY for LiteLLM
+        if 'OPENROUTER_API_KEY' in env and 'OPENROUTER__KEY' not in env:
+            env['OPENROUTER__KEY'] = env['OPENROUTER_API_KEY']
+
+        # Check pr-agent is installed
+        if not shutil.which('pr-agent'):
+            return jsonify({'error': 'PR-Agent (pr-agent) is not installed. Install with: pip install pr-agent'}), 500
+
+        # Run PR-Agent review directly
         try:
-            subprocess.run(['git', 'fetch', 'origin', 'main'], cwd=project_path, capture_output=True, timeout=10)
-            subprocess.run(['git', 'checkout', head_ref], cwd=project_path, check=True, capture_output=True)
-            # Rebase onto latest main to keep PR in sync
-            subprocess.run(['git', 'rebase', 'origin/main'], cwd=project_path, capture_output=True)
-        except subprocess.CalledProcessError as rebase_e:
-            # If rebase fails, continue anyway; push may fail but we'll report error later
-            pass
+            result = subprocess.run(
+                ['pr-agent', 'review', '--pr', pr_number],
+                cwd=project_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode != 0:
+                return jsonify({'error': 'PR-Agent failed', 'details': result.stderr or result.stdout}), 500
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'PR-Agent review timed out after 5 minutes'}), 500
 
-        # Append timestamp to a trigger file to ensure code change
-        trigger_file = os.path.join(project_path, '.pr_agent_trigger.log')
-        with open(trigger_file, 'a') as f:
-            f.write(f"Triggered at: {subprocess.run(['date'], capture_output=True, text=True).stdout}")
-        subprocess.run(['git', 'add', trigger_file], cwd=project_path, check=True, capture_output=True)
-        subprocess.run(['git', 'commit', '-m', 'Trigger PR-Agent review'], cwd=project_path, check=True, capture_output=True)
-        subprocess.run(['git', 'push', 'origin', head_ref], cwd=project_path, check=True, capture_output=True)
-        return jsonify({'status': 'triggered', 'branch': head_ref, 'repo': f'{owner}/{project_name}'})
+        return jsonify({'status': 'review_completed', 'pr_number': pr_number, 'repo': full_repo})
     except subprocess.CalledProcessError as e:
         return jsonify({'error': str(e), 'details': e.stderr}), 500
     except Exception as e:
@@ -807,5 +834,15 @@ if __name__ == '__main__':
     print("🌐 Wiggum Web Server starting...")
     print("📍 http://localhost:5000")
     print("")
+    
+    # Global error handlers to ensure JSON responses
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({'error': 'Not found', 'message': str(e)}), 404
+    
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        app.logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
     
     app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
