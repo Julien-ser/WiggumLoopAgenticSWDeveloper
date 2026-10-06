@@ -1129,6 +1129,12 @@ PROMPT
     # Now commit if there are changes
     if git commit -m "Iteration $iteration: $next_task" > /dev/null 2>&1; then
         echo "✅ Changes committed"
+        # Jev judge, observation mode: logs verdicts to logs/jev-decisions.jsonl, never alters the loop
+        if [ "${JEV_JUDGE:-on}" = "on" ]; then
+            git diff HEAD~1 HEAD > /tmp/wiggum-jev-$$.diff 2>/dev/null
+            timeout 45 python3 "$MASTER_DIR/jev_judge.py" "$next_task" /tmp/wiggum-jev-$$.diff "$ITER_LOG_FILE" || true
+            rm -f /tmp/wiggum-jev-$$.diff
+        fi
         if git_push_with_rebase_retry "$SESSION_BRANCH"; then
             echo "✅ Pushed to GitHub (branch: $SESSION_BRANCH)"
         else
