@@ -222,7 +222,7 @@ if [ ! -d ".git" ]; then
     # Check if repo exists on GitHub, create if needed
     if ! gh repo view "$FULL_REPO" > /dev/null 2>&1; then
         echo "📦 Repository $FULL_REPO not found on GitHub. Creating..."
-        if gh repo create "$FULL_REPO" --public --source="$PROJECT_PATH" --remote=origin --push 2>/dev/null; then
+        if gh repo create "$FULL_REPO" --public 2>/dev/null && git push -u origin main 2>/dev/null; then
             echo "✅ Repository created and pushed to GitHub: $FULL_REPO"
         else
             echo "⚠️  Could not auto-create repo on GitHub. You may need to create it manually."
@@ -247,7 +247,7 @@ else
             # Check if repo exists on GitHub
             if ! gh repo view "$FULL_REPO" > /dev/null 2>&1; then
                 echo "📦 Repository $FULL_REPO not found on GitHub. Creating..."
-                if gh repo create "$FULL_REPO" --public --source="$PROJECT_PATH" --remote=origin --push 2>/dev/null; then
+                if gh repo create "$FULL_REPO" --public 2>/dev/null && git push -u origin main 2>/dev/null; then
                     echo "✅ Repository created and pushed to GitHub: $FULL_REPO"
                 else
                     echo "⚠️  Could not auto-create repo on GitHub. You may need to create it manually."
@@ -575,12 +575,12 @@ while true; do
     fi
     
     echo "📍 Iteration $iteration at $(date)..."
+    ITER_START_SHA=$(git rev-parse HEAD 2>/dev/null)  # Jev judge diffs from here, so the agent's own commits are included
     
     # ====================================================================
     # CHECK FOR CI/CD ERRORS FROM GITHUB ACTIONS
     # ====================================================================
     if command -v gh &> /dev/null; then
-        MASTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         if [ -f "$MASTER_DIR/check-ci-errors.sh" ]; then
             # Check for CI errors and add them to TASKS.md if found
             bash "$MASTER_DIR/check-ci-errors.sh" "$PROJECT_PATH" 2>/dev/null || true
@@ -1131,7 +1131,7 @@ PROMPT
         echo "✅ Changes committed"
         # Jev judge, observation mode: logs verdicts to logs/jev-decisions.jsonl, never alters the loop
         if [ "${JEV_JUDGE:-on}" = "on" ]; then
-            git diff HEAD~1 HEAD > /tmp/wiggum-jev-$$.diff 2>/dev/null
+            git diff "${ITER_START_SHA:-HEAD~1}" HEAD -- . ':(exclude)logs' > /tmp/wiggum-jev-$$.diff 2>/dev/null
             timeout 45 python3 "$MASTER_DIR/jev_judge.py" "$next_task" /tmp/wiggum-jev-$$.diff "$ITER_LOG_FILE" || true
             rm -f /tmp/wiggum-jev-$$.diff
         fi
